@@ -1,0 +1,6 @@
+{
+  "name": "AgriSetu",
+  "description": "Smart Farming. Better Decisions. Direct Connections. Agricultural platform connecting farmers and customers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
