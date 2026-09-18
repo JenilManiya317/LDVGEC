@@ -14,8 +14,14 @@ Requirements:
 """
 
 import os
+import sys
 import json
 import time
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -36,6 +42,7 @@ from src.features import (
     save_features_json,
 )
 from src.metrics import compute_metrics
+
 
 RANDOM_SEED = 42
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
