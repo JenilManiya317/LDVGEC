@@ -1,0 +1,184 @@
+{
+  "target_column": "Yield",
+  "leakage_columns_identified": [
+    "Production"
+  ],
+  "safe_feature_columns": [
+    "Crop",
+    "Crop_Year",
+    "Season",
+    "State",
+    "Area",
+    "Annual_Rainfall",
+    "Fertilizer",
+    "Pesticide",
+    "Temperature_C",
+    "Humidity_Percent",
+    "Soil_Type",
+    "Soil_pH",
+    "Nitrogen_kg_ha",
+    "Phosphorus_kg_ha",
+    "Potassium_kg_ha",
+    "Soil_Moisture_Percent",
+    "Irrigation_Type",
+    "Crop_Variety",
+    "Sowing_Month",
+    "Harvest_Month",
+    "Growing_Days",
+    "Soil_Fertility_Index",
+    "Pest_Risk_Index",
+    "Disease_Risk_Index",
+    "Water_Availability_Index",
+    "Weather_Stress_Index",
+    "Crop_Health_Index"
+  ],
+  "column_details": {
+    "Crop": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Crop_Year": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Season": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "State": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Area": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Production": {
+      "role": "LEAKAGE_FORBIDDEN",
+      "leakage_risk": "CRITICAL",
+      "correlation_with_yield": 0.5708,
+      "correlation_with_calc_yield": 0.9965,
+      "reason": "Production represents the total realized harvest volume after harvest. Since Yield = Production / Area, providing Production allows the model to trivially back-calculate the yield with ~0.9965 correlation. Must be strictly excluded."
+    },
+    "Annual_Rainfall": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Fertilizer": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Pesticide": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Yield": {
+      "role": "TARGET",
+      "leakage_risk": "HIGH_IF_USED_AS_FEATURE",
+      "reason": "Target variable to be predicted. Must never be an input feature."
+    },
+    "Temperature_C": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Humidity_Percent": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Soil_Type": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Soil_pH": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Nitrogen_kg_ha": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Phosphorus_kg_ha": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Potassium_kg_ha": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Soil_Moisture_Percent": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Irrigation_Type": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Crop_Variety": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Sowing_Month": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Harvest_Month": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Growing_Days": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Soil_Fertility_Index": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Pest_Risk_Index": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Disease_Risk_Index": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Water_Availability_Index": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Weather_Stress_Index": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    },
+    "Crop_Health_Index": {
+      "role": "INPUT_FEATURE",
+      "leakage_risk": "NONE",
+      "reason": "Pre-harvest agronomic, soil, meteorological, or management attribute."
+    }
+  }
+}
