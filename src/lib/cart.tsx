@@ -161,8 +161,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Asynchronously sync to backend database
     api.orders.create({
       items: items.map(it => ({
-        listing_id: parseInt(it.product.id, 10) || 1,
+        listing_id: String(it.product.id),
         quantity_kg: it.quantityKg,
+        crop_name: it.product.name,
+        price_per_kg: it.product.pricePerKg,
+        farmer_id: it.product.farmerId,
       })),
       delivery_name: details.address.name,
       delivery_phone: details.address.phone,

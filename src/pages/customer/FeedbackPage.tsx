@@ -25,8 +25,8 @@ export const FeedbackPage: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const orderIdNum = parseInt(currentOrder.id.replace(/\D/g, ''), 10) || 1;
-      await api.reviews.create(orderIdNum, rating, `${quality} Quality, ${delivery} Delivery: ${reviewText}`);
+      const orderIdStr = String(currentOrder.id || '1');
+      await api.reviews.create(orderIdStr, rating, `${quality} Quality, ${delivery} Delivery: ${reviewText}`);
       setSubmitted(true);
     } catch (err) {
       console.warn('Backend review submission fallback:', err);

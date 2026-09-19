@@ -35,32 +35,32 @@ export const ProductDetailPage: React.FC = () => {
   useEffect(() => {
     let isCancelled = false;
     const fetchSingleListing = async () => {
-      const numId = parseInt(rawId, 10);
-      if (!isNaN(numId)) {
+      if (rawId) {
         try {
-          const res = await api.marketplace.getListing(numId);
+          const res = await api.marketplace.getListing(rawId);
           if (!isCancelled && res.data) {
             const d = res.data;
             setProduct({
-              id: String(d.id),
-              name: d.crop_name || d.name,
-              category: d.category || 'Vegetables',
-              pricePerKg: d.price_per_kg ?? 30,
-              unit: d.unit || 'kg',
+              id: String(d.id || rawId),
+              name: d.crop_name || d.name || initialProduct.name,
+              category: d.category || initialProduct.category || 'Vegetables',
+              pricePerKg: d.price_per_kg ?? initialProduct.pricePerKg ?? 30,
+              unit: d.unit || initialProduct.unit || 'kg',
               imageUrl: d.image_url || initialProduct.imageUrl,
-              farmerId: String(d.farmer_id || '1'),
-              farmerName: d.farmer_name || 'Rudra Patel',
-              farmName: d.farm_name || 'Patel Organic Farms',
-              location: d.farmer_location || 'Surat, Gujarat',
-              farmerAvatar: d.farmer_avatar || '/images/farmer-portrait.jpg',
-              rating: d.farmer_rating || 4.9,
-              reviewsCount: d.farmer_reviews_count || 12,
-              availableStockKg: d.available_stock_kg ?? 200,
-              quantityAvailableKg: d.available_stock_kg ?? 200,
-              description: d.description || '',
-              variety: d.variety || 'Hybrid Fresh Pick',
-              isOrganic: Boolean(d.is_organic),
-              harvestDate: d.harvest_date || 'Today',
+              farmerId: String(d.farmer_id || initialProduct.farmerId || '1'),
+              farmerName: d.farmer_name || initialProduct.farmerName || 'Rudra Patel',
+              farmName: d.farm_name || initialProduct.farmName || 'Patel Organic Farms',
+              location: d.farmer_location || initialProduct.location || 'Surat, Gujarat',
+              farmerAvatar: d.farmer_avatar || initialProduct.farmerAvatar || '/images/farmer-portrait.jpg',
+              rating: d.farmer_rating || initialProduct.rating || 4.9,
+              reviewsCount: d.farmer_reviews_count || initialProduct.reviewsCount || 12,
+              availableStockKg: d.available_stock_kg ?? initialProduct.availableStockKg ?? 200,
+              quantityAvailableKg: d.available_stock_kg ?? initialProduct.availableStockKg ?? 200,
+              description: d.description || initialProduct.description || '',
+              variety: d.variety || initialProduct.variety || 'Hybrid Fresh Pick',
+              isOrganic: d.is_organic !== undefined ? Boolean(d.is_organic) : initialProduct.isOrganic,
+              harvestDate: d.harvest_date || initialProduct.harvestDate || 'Today',
+              farmerPhone: d.farmer_phone || initialProduct.farmerPhone || '+91 98251 44321',
             });
           }
         } catch (err) {

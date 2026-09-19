@@ -119,11 +119,35 @@ export const CropHealthPage: React.FC = () => {
       // Save report to localStorage for result page
       localStorage.setItem('farmwise_last_crop_health', JSON.stringify(report));
 
-      // 2. Also attempt background backend sync if running
+      // 2. Also attempt backend analysis if file is provided
       if (selectedFile) {
-        api.cropHealth.analyze(selectedFile).catch((err) => {
+        try {
+          const backendRes = await api.cropHealth.analyze(selectedFile);
+          if (backendRes.data?.analysis) {
+            const b = backendRes.data.analysis;
+            const mergedReport = {
+              ...report,
+              cropName: b.crop_name || report.cropName,
+              diseaseDetected: b.health_status || report.diseaseDetected,
+              confidenceScore: b.health_percentage ? Math.round(b.health_percentage) : report.confidenceScore,
+              healthPercentage: b.health_percentage || report.healthPercentage,
+              detectedIssues: b.detected_issues || report.detectedIssues,
+              symptoms: b.detected_issues || report.symptoms,
+              treatment: {
+                organicSolution: b.treatment?.organicSolution || report.treatment.organicSolution,
+                chemicalAlternative: b.treatment?.chemicalSolution || report.treatment.chemicalAlternative,
+                dosage: b.treatment?.dosage || report.treatment.dosage,
+                frequency: b.treatment?.frequency || report.treatment.frequency,
+                expectedRecoveryDays: b.treatment?.expectedRecoveryDays ?? report.treatment.expectedRecoveryDays,
+              },
+              preventativeMeasures: b.recommendations || report.preventativeMeasures,
+              source: 'FarmWise AI Computer Vision & Backend Multi-Modal Engine',
+            };
+            localStorage.setItem('farmwise_last_crop_health', JSON.stringify(mergedReport));
+          }
+        } catch (err) {
           console.warn('Backend sync note:', err);
-        });
+        }
       }
     } catch (err) {
       console.warn('AI analysis fallback:', err);

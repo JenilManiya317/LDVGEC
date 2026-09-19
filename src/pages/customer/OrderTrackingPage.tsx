@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { CustomerNavbar } from '../../components/layout/CustomerNavbar';
 import { GlassCard } from '../../components/common/GlassCard';
@@ -9,20 +9,63 @@ import {
   MessageSquare,
   Phone
 } from 'lucide-react';
+import { api } from '../../lib/api';
+
+const ORDER_STATUS_LABELS = [
+  { label: 'Order Received', desc: 'Logged on farmer harvest terminal' },
+  { label: 'Payment Confirmed', desc: 'Secure direct payment confirmed' },
+  { label: 'Farmer Harvest Scheduled', desc: 'Crop harvested fresh from plot' },
+  { label: 'Aerated Packaging Complete', desc: 'Packed in organic ventilated crates' },
+  { label: 'Out for Doorstep Delivery', desc: 'In transit via direct delivery' },
+  { label: 'Delivered', desc: 'Arrived at your doorstep in fresh condition' }
+];
 
 export const OrderTrackingPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { currentOrder } = useCart();
+  const { currentOrder, activeOrder, updateOrderStatus } = useCart();
   const [contactOpen, setContactOpen] = useState(false);
+  const [liveStatusIndex, setLiveStatusIndex] = useState<number>(activeOrder.currentStatusIndex ?? 1);
 
-  const timelineSteps = [
-    { label: 'Order Received', status: 'completed', desc: 'Logged on farmer harvest terminal', time: '02:30 PM' },
-    { label: 'Payment Escrow Confirmed', status: 'completed', desc: 'Secure direct escrow reserved', time: '02:31 PM' },
-    { label: 'Farmer Harvest Scheduled', status: 'completed', desc: 'Rudra Patel picked from Sector A', time: '03:15 PM' },
-    { label: 'Aerated Packaging Complete', status: 'completed', desc: 'Packed in organic ventilated crates', time: '03:45 PM' },
-    { label: 'Out for Doorstep Delivery', status: 'current', desc: 'In transit via climate van (GJ-05-AB-4112)', time: '04:10 PM' },
-    { label: 'Estimated Delivery', status: 'upcoming', desc: 'Expected at destination by 04:50 PM', time: '04:50 PM' }
-  ];
+  // Sync with backend order status
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchLiveStatus = async () => {
+      const orderId = activeOrder.id || currentOrder.id;
+      if (orderId) {
+        try {
+          const res = await api.orders.get(orderId);
+          if (!isCancelled && res.data && res.data.current_status_index !== undefined) {
+            setLiveStatusIndex(res.data.current_status_index);
+            updateOrderStatus(res.data.current_status_index);
+          }
+        } catch (err) {
+          console.warn('Live order status fallback:', err);
+        }
+      }
+    };
+
+    fetchLiveStatus();
+    const interval = setInterval(fetchLiveStatus, 5000);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeOrder.id, currentOrder.id]);
+
+  const timelineSteps = ORDER_STATUS_LABELS.map((item, idx) => {
+    let status: 'completed' | 'current' | 'upcoming' = 'upcoming';
+    if (idx < liveStatusIndex) {
+      status = 'completed';
+    } else if (idx === liveStatusIndex) {
+      status = 'current';
+    }
+    return {
+      label: item.label,
+      desc: item.desc,
+      status,
+      time: idx <= liveStatusIndex ? 'Verified' : 'Pending'
+    };
+  });
 
   return (
     <div className="flex flex-col min-h-screen">

@@ -38,6 +38,8 @@ const ORDER_STATUS_STEPS = [
   'Delivered'
 ];
 
+import { api } from '../../lib/api';
+
 export const SellerHubPage: React.FC = () => {
   const { navigate } = useRouter();
   const { user } = useAuth();
@@ -49,49 +51,158 @@ export const SellerHubPage: React.FC = () => {
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState<string>('');
 
-  // Load custom listings & orders on mount
+  // Load custom listings & orders on mount and sync with backend
   useEffect(() => {
-    // 1. Get farmer's listed crops (all custom listings + default crops for this farmer)
-    const custom = getCustomListings();
-    if (custom.length > 0) {
-      setListedCrops(custom);
-    } else {
-      // If no custom listings yet, display default mock products as the initial active inventory
-      setListedCrops(MOCK_PRODUCTS.slice(0, 3));
-    }
+    let isCancelled = false;
 
-    // 2. Orders list (including active cart order + sample historical order)
-    const mockOrder2: OrderItem = {
-      id: 'ord_fw_9120',
-      orderNumber: 'FW-2026-9120',
-      date: 'September 17, 2026',
-      items: [
-        { product: MOCK_PRODUCTS[0], quantityKg: 25 },
-        { product: MOCK_PRODUCTS[2], quantityKg: 10 },
-      ],
-      subtotal: 880,
-      deliveryFee: 40,
-      total: 920,
-      paymentMethod: 'UPI',
-      paymentStatus: 'Paid',
-      deliveryAddress: {
-        name: 'Priya Mehta',
-        phone: '+91 98980 12345',
-        address: '401, Nilkanth Heights, Adajan',
-        city: 'Surat',
-        state: 'Gujarat',
-        pincode: '395009'
-      },
-      deliveryMethod: 'Standard Delivery',
-      currentStatusIndex: 5, // Delivered
-      farmerName: user?.name || 'Rudra Patel',
-      farmerPhone: user?.phone || '+91 98251 44321'
+    const loadData = async () => {
+      // 1. Get farmer's listed crops (backend + custom local listings)
+      const custom = getCustomListings();
+      try {
+        const farmerIdParam = user?.id || '';
+        const res = await api.marketplace.listings('', '', farmerIdParam);
+        if (!isCancelled && res.data?.listings && res.data.listings.length > 0) {
+          const backendItems: ProductItem[] = res.data.listings.map((row: any) => ({
+            id: String(row.id || row._id),
+            name: row.crop_name || row.name || 'Produce',
+            category: row.category || 'Vegetables',
+            pricePerKg: row.price_per_kg ?? 30,
+            unit: row.unit || 'kg',
+            imageUrl: row.image_url || 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=85',
+            farmerId: String(row.farmer_id || user?.id || '1'),
+            farmerName: row.farmer_name || user?.name || 'Rudra Patel',
+            farmName: row.farm_name || user?.farmName || 'Patel Organic Farms',
+            location: row.farmer_location || user?.location || 'Surat, Gujarat',
+            farmerAvatar: row.farmer_avatar || user?.avatar || '/images/farmer-portrait.jpg',
+            rating: row.farmer_rating || 5.0,
+            reviewsCount: row.farmer_reviews_count || 1,
+            availableStockKg: row.available_stock_kg ?? 200,
+            quantityAvailableKg: row.available_stock_kg ?? 200,
+            description: row.description || '',
+            variety: row.variety || 'Grade-A Organic',
+            isOrganic: Boolean(row.is_organic),
+            harvestDate: row.harvest_date || 'Today',
+            farmerPhone: row.farmer_phone || user?.phone || '+91 98251 44321',
+          }));
+
+          // Merge backend items with custom local listings
+          const map = new Map<string, ProductItem>();
+          for (const it of custom) map.set(it.id, it);
+          for (const it of backendItems) {
+            if (!map.has(it.id)) map.set(it.id, it);
+          }
+          setListedCrops(Array.from(map.values()));
+        } else if (!isCancelled) {
+          if (custom.length > 0) {
+            setListedCrops(custom);
+          } else {
+            setListedCrops(MOCK_PRODUCTS.slice(0, 3));
+          }
+        }
+      } catch (err) {
+        console.warn('SellerHub listings fetch fallback:', err);
+        if (!isCancelled) {
+          setListedCrops(custom.length > 0 ? custom : MOCK_PRODUCTS.slice(0, 3));
+        }
+      }
+
+      // 2. Orders list from backend
+      try {
+        const ordersRes = await api.orders.list();
+        if (!isCancelled && ordersRes.data?.orders && ordersRes.data.orders.length > 0) {
+          const backendOrders: OrderItem[] = ordersRes.data.orders.map((o: any) => ({
+            id: String(o.id || o._id || o.order_number),
+            orderNumber: o.order_number || `FW-2026-${String(o.id || '9120').slice(-4)}`,
+            date: o.created_at ? new Date(o.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Today',
+            items: (o.items || []).map((it: any) => ({
+              product: {
+                id: String(it.listing_id || '1'),
+                name: it.crop_name || 'Harvest Produce',
+                category: 'Vegetables',
+                pricePerKg: it.price_per_kg || 30,
+                unit: 'kg',
+                imageUrl: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=85',
+                farmerId: String(o.farmer_id || '1'),
+                farmerName: o.farmer_name || user?.name || 'Rudra Patel',
+                farmName: user?.farmName || 'Patel Organic Farms',
+                location: user?.location || 'Surat, Gujarat',
+                farmerAvatar: user?.avatar || '/images/farmer-portrait.jpg',
+                rating: 5.0,
+                reviewsCount: 1,
+                availableStockKg: 100,
+                quantityAvailableKg: 100,
+                description: '',
+                variety: 'Fresh Pick',
+                isOrganic: true,
+                harvestDate: 'Today'
+              },
+              quantityKg: it.quantity_kg || 1,
+            })),
+            subtotal: o.subtotal || 0,
+            deliveryFee: o.delivery_fee || 0,
+            total: o.total || 0,
+            paymentMethod: o.payment_method || 'UPI',
+            paymentStatus: o.payment_status || 'Paid',
+            deliveryAddress: {
+              name: o.delivery_name || 'Buyer',
+              phone: o.delivery_phone || '+91 98980 12345',
+              address: o.delivery_address || 'Adajan',
+              city: o.delivery_city || 'Surat',
+              state: o.delivery_state || 'Gujarat',
+              pincode: o.delivery_pincode || '395009'
+            },
+            deliveryMethod: o.delivery_method || 'Standard Delivery',
+            currentStatusIndex: o.current_status_index ?? 1,
+            farmerName: o.farmer_name || user?.name || 'Rudra Patel',
+            farmerPhone: o.farmer_phone || user?.phone || '+91 98251 44321'
+          }));
+
+          // Merge with active client order if not present
+          const ordMap = new Map<string, OrderItem>();
+          ordMap.set(activeOrder.id, activeOrder);
+          for (const bo of backendOrders) ordMap.set(bo.id, bo);
+          setOrders(Array.from(ordMap.values()));
+        } else if (!isCancelled) {
+          const mockOrder2: OrderItem = {
+            id: 'ord_fw_9120',
+            orderNumber: 'FW-2026-9120',
+            date: 'September 17, 2026',
+            items: [
+              { product: MOCK_PRODUCTS[0], quantityKg: 25 },
+              { product: MOCK_PRODUCTS[2], quantityKg: 10 },
+            ],
+            subtotal: 880,
+            deliveryFee: 40,
+            total: 920,
+            paymentMethod: 'UPI',
+            paymentStatus: 'Paid',
+            deliveryAddress: {
+              name: 'Priya Mehta',
+              phone: '+91 98980 12345',
+              address: '401, Nilkanth Heights, Adajan',
+              city: 'Surat',
+              state: 'Gujarat',
+              pincode: '395009'
+            },
+            deliveryMethod: 'Standard Delivery',
+            currentStatusIndex: 5, // Delivered
+            farmerName: user?.name || 'Rudra Patel',
+            farmerPhone: user?.phone || '+91 98251 44321'
+          };
+          setOrders([activeOrder, mockOrder2]);
+        }
+      } catch (err) {
+        console.warn('SellerHub orders fetch fallback:', err);
+      }
     };
 
-    setOrders([activeOrder, mockOrder2]);
+    loadData();
+    return () => {
+      isCancelled = true;
+    };
   }, [activeOrder, user]);
 
-  const handleUpdateOrderStatus = (orderId: string, newStatusIndex: number) => {
+  const handleUpdateOrderStatus = async (orderId: string, newStatusIndex: number) => {
     setOrders((prev) =>
       prev.map((ord) =>
         ord.id === orderId ? { ...ord, currentStatusIndex: newStatusIndex } : ord
@@ -100,9 +211,15 @@ export const SellerHubPage: React.FC = () => {
     if (activeOrder.id === orderId) {
       updateOrderStatus(newStatusIndex);
     }
+    // Sync with backend API
+    try {
+      await api.orders.updateStatus(orderId, newStatusIndex);
+    } catch (e) {
+      console.warn('Backend order status update note:', e);
+    }
   };
 
-  const handleSavePrice = (cropId: string) => {
+  const handleSavePrice = async (cropId: string) => {
     const nextPrice = parseFloat(tempPrice);
     if (!isNaN(nextPrice) && nextPrice > 0) {
       const updated = listedCrops.map((c) =>
@@ -114,11 +231,17 @@ export const SellerHubPage: React.FC = () => {
       } catch (e) {
         console.warn('Error updating price in storage:', e);
       }
+      // Sync with backend API
+      try {
+        await api.marketplace.updateListing(cropId, { price_per_kg: nextPrice });
+      } catch (e) {
+        console.warn('Backend price update note:', e);
+      }
     }
     setEditingPriceId(null);
   };
 
-  const handleDeleteListing = (cropId: string) => {
+  const handleDeleteListing = async (cropId: string) => {
     if (window.confirm('Are you sure you want to remove this crop from the marketplace?')) {
       const updated = listedCrops.filter((c) => c.id !== cropId);
       setListedCrops(updated);
@@ -126,6 +249,12 @@ export const SellerHubPage: React.FC = () => {
         localStorage.setItem('agrisetu_custom_listings_v1', JSON.stringify(updated));
       } catch (e) {
         console.warn('Error deleting listing:', e);
+      }
+      // Sync with backend API
+      try {
+        await api.marketplace.deleteListing(cropId);
+      } catch (e) {
+        console.warn('Backend delete listing note:', e);
       }
     }
   };

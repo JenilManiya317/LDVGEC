@@ -1,13 +1,13 @@
 """
-Crop Health Router — AI-powered crop disease detection via image upload
-and diagnostic history persistence in MongoDB.
+Crop Health Router — AI & Computer Vision Crop Disease Detection & Diagnostics
+with MongoDB Diagnostic History Persistence.
 """
 
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Header
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Header
 
 from backend.ml.crop_analyzer import crop_analyzer
 from backend.database import get_db, format_doc
@@ -20,15 +20,18 @@ router = APIRouter(prefix="/api/crop-health", tags=["Crop Health"])
 @router.post("/analyze")
 async def analyze_crop_health(
     image: UploadFile = File(...),
+    crop_name: Optional[str] = Form(None),
+    growth_stage: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
     """
-    Upload a crop image for AI-powered disease and health analysis.
+    Upload a crop image for real-time Computer Vision & AI pathology diagnostics.
     Saves analysis report to MongoDB when authenticated.
     """
     # Validate file type
-    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/jpg", "application/octet-stream"}
     if image.content_type and image.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
@@ -43,17 +46,24 @@ async def analyze_crop_health(
         raise HTTPException(status_code=400, detail="Image too large. Maximum size is 15MB.")
 
     if len(image_bytes) == 0:
-        raise HTTPException(status_code=400, detail="Empty image file")
+        raise HTTPException(status_code=400, detail="Empty image file provided.")
 
     try:
-        result = await crop_analyzer.analyze_image(image_bytes, image.filename or "crop.jpg")
+        result = await crop_analyzer.analyze_image(
+            image_bytes=image_bytes,
+            filename=image.filename or "crop.jpg",
+            crop_hint=crop_name,
+            growth_stage=growth_stage,
+            notes=notes,
+        )
 
         # Save to MongoDB crop_health collection if authenticated
         user = await get_current_user(authorization, db)
         if user:
             report_doc = {
-                "user_id": user["_id"],  # ObjectId user_id
+                "user_id": user["_id"],
                 "filename": image.filename or "crop.jpg",
+                "crop_name": result.get("crop_name", crop_name),
                 "analysis": result,
                 "created_at": datetime.now(timezone.utc),
             }
