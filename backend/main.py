@@ -31,21 +31,27 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     # Initialize MongoDB connection & indexes
-    await init_db()
-    logger.info("MongoDB initialized & collection indexes verified.")
+    try:
+        await init_db()
+        logger.info("MongoDB initialized & collection indexes verified.")
+    except Exception as e:
+        logger.warning(f"MongoDB connection deferred or failed: {e}")
 
     # Load ML model
-    model_loaded = predictor.load_model()
-    if model_loaded:
-        logger.info(f"ML Model loaded: {predictor.model_info}")
-    else:
-        logger.warning(
-            "ML model NOT loaded. Yield prediction endpoint will return 503. "
-            "Run: python -m backend.scripts.train_model"
-        )
+    try:
+        model_loaded = predictor.load_model()
+        if model_loaded:
+            logger.info(f"ML Model loaded: {predictor.model_info}")
+        else:
+            logger.warning(
+                "ML model NOT loaded. Yield prediction endpoint will return 503."
+            )
+    except Exception as e:
+        logger.warning(f"ML model loading deferred or failed: {e}")
 
     logger.info("FarmWise Backend Ready!")
     logger.info("=" * 60)
+
 
     yield
 
