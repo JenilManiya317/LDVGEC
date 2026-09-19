@@ -30,7 +30,7 @@ interface UserProfileModalProps {
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, role, logout } = useAuth();
+  const { user, role, logout, updateProfile } = useAuth();
   const { navigate } = useRouter();
 
   const [activeTab, setActiveTab] = useState<'details' | 'farm' | 'security'>('details');
@@ -43,8 +43,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
     phone: user?.phone || (role === 'farmer' ? '+91 98251 44321' : '+91 97234 88120'),
     location: user?.location || (role === 'farmer' ? 'Surat, Gujarat' : 'Ahmedabad, Gujarat'),
     avatar: user?.avatar || (role === 'farmer' ? '/images/farmer-portrait.jpg' : '/images/customer-greenhouse.png'),
-    farmName: 'Patel Organic Agro Fields',
-    farmSize: '12.5 Acres',
+    farmName: user?.farmName || 'Patel Organic Agro Fields',
+    farmSize: user?.totalArea || '12.5 Acres',
     soilType: 'Black Clay Alluvial',
     irrigationType: 'Solar Micro-Drip',
     certId: 'NPOP-ORG-GJ-44910',
@@ -56,8 +56,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    await updateProfile({
+      name: formData.name,
+      phone: formData.phone,
+      location: formData.location,
+      avatar: formData.avatar,
+      farmName: formData.farmName,
+      totalArea: formData.farmSize,
+    });
     setSavedNotice(true);
     setTimeout(() => {
       setSavedNotice(false);

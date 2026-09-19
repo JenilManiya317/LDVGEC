@@ -20,6 +20,7 @@ interface AuthContextType {
     location: string;
     avatar?: string;
   }) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (data: Partial<UserProfile> & { farmName?: string; totalArea?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -201,6 +202,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (data: Partial<UserProfile> & { farmName?: string; totalArea?: string }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.auth.updateProfile({
+        name: data.name,
+        phone: data.phone,
+        location: data.location,
+        farm_name: data.farmName,
+        total_area: data.totalArea,
+        avatar: data.avatar,
+      });
+
+      if (res.data?.user) {
+        setUser(toUserProfile(res.data.user, role || undefined));
+        return { success: true };
+      }
+    } catch (err) {
+      console.warn('Backend update profile failed:', err);
+    }
+    // Update local user state
+    if (user) {
+      setUser({ ...user, ...data });
+    }
+    return { success: true };
+  };
+
   const logout = () => {
     setUser(null);
     clearToken();
@@ -218,6 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAsDemoFarmer,
         loginAsDemoCustomer,
         register,
+        updateProfile,
         logout
       }}
     >

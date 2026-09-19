@@ -114,7 +114,30 @@ export const FarmCropSetupPage: React.FC = () => {
   }, [cropData.crop, cropData.season, cropData.area, cropData.soilPh, cropData.moistureTarget, farmData.state, farmData.soilType, farmData.irrigationType, areaNum]);
 
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    try {
+      await api.farm.updateProfile({
+        name: farmData.farmName,
+        total_area: parseFloat(farmData.totalArea) || 10.0,
+        state: farmData.state,
+        district: farmData.district,
+        soil_type: farmData.soilType,
+        irrigation_type: farmData.irrigationType,
+        location: farmData.location,
+      });
+      await api.farm.addCrop({
+        crop: cropData.crop,
+        variety: cropData.variety,
+        season: cropData.season,
+        area: parseFloat(cropData.area) || 3.5,
+        sowingDate: cropData.sowingDate,
+        expectedHarvestDate: cropData.expectedHarvestDate,
+        soilPh: parseFloat(cropData.soilPh) || 6.5,
+        moistureTarget: parseFloat(cropData.moistureTarget) || 65.0,
+      });
+    } catch (err) {
+      console.warn('Backend save farm profile fallback:', err);
+    }
     setSavedSuccess(true);
     setTimeout(() => {
       navigate('/farmer/dashboard');
