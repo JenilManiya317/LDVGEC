@@ -8,10 +8,18 @@ interface AuthContextType {
   role: UserRole | null;
   isAuthenticated: boolean;
   login: (role: UserRole, email?: string, name?: string) => void;
-  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithCredentials: (email: string, password: string, chosenRole?: UserRole) => Promise<{ success: boolean; error?: string }>;
   loginAsDemoFarmer: () => void;
   loginAsDemoCustomer: () => void;
-  register: (data: { name: string; email: string; password?: string; role: UserRole; phone?: string; location: string }) => Promise<{ success: boolean; error?: string }>;
+  register: (data: {
+    name: string;
+    email: string;
+    password?: string;
+    role: UserRole;
+    phone?: string;
+    location: string;
+    avatar?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -50,20 +58,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /**
    * Convert a backend user object to our UserProfile format.
    */
-  const toUserProfile = (backendUser: any, chosenRole?: UserRole): UserProfile => ({
-    id: String(backendUser.id || `user_${Date.now()}`),
-    name: backendUser.name || 'User',
-    email: backendUser.email || '',
-    role: (backendUser.role || chosenRole || 'farmer') as UserRole,
-    phone: backendUser.phone || '',
-    location: backendUser.location || '',
-    avatar: backendUser.avatar ||
-      (backendUser.role === 'farmer' ? DEMO_FARMER.avatar : DEMO_CUSTOMER.avatar),
-    farmName: backendUser.farm_name || undefined,
-    totalArea: backendUser.total_area || undefined,
-    rating: backendUser.rating || 0,
-    reviewsCount: backendUser.reviews_count || 0,
-  });
+  const toUserProfile = (backendUser: any, chosenRole?: UserRole): UserProfile => {
+    const userRole = (chosenRole || backendUser.role || 'farmer') as UserRole;
+    return {
+      id: String(backendUser.id || `user_${Date.now()}`),
+      name: backendUser.name || 'User',
+      email: backendUser.email || '',
+      role: userRole,
+      phone: backendUser.phone || '',
+      location: backendUser.location || '',
+      avatar: backendUser.avatar ||
+        (userRole === 'farmer' ? DEMO_FARMER.avatar : DEMO_CUSTOMER.avatar),
+      farmName: backendUser.farm_name || undefined,
+      totalArea: backendUser.total_area || undefined,
+      rating: backendUser.rating || 0,
+      reviewsCount: backendUser.reviews_count || 0,
+    };
+  };
 
   /**
    * Quick login with demo data (no backend call) — used for role selection.
@@ -73,59 +84,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({
         ...DEMO_FARMER,
         email: email || DEMO_FARMER.email,
-        name: name || DEMO_FARMER.name
+        name: name || DEMO_FARMER.name,
+        role: 'farmer'
       });
     } else {
       setUser({
         ...DEMO_CUSTOMER,
         email: email || DEMO_CUSTOMER.email,
-        name: name || DEMO_CUSTOMER.name
+        name: name || DEMO_CUSTOMER.name,
+        role: 'customer'
       });
     }
   };
 
   /**
    * Login with email/password via the backend API.
-   * Falls back to demo login if the backend is unavailable.
+   * Enforces chosenRole so a farmer always accesses the farmer workspace.
    */
-  const loginWithCredentials = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithCredentials = async (
+    email: string,
+    password: string,
+    chosenRole?: UserRole
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await api.auth.login(email, password);
       if (res.error) {
-        // Backend returned an error — try demo fallback
-        console.warn('Backend login failed, using demo fallback:', res.error);
-        // If this looks like a demo email, use demo data
-        if (email.includes('farmer') || email.includes('rudra')) {
-          login('farmer', email);
-          return { success: true };
-        } else {
-          login('customer', email);
-          return { success: true };
-        }
+        console.warn('Backend login error, using fallback:', res.error);
+        const targetRole = chosenRole || (email.includes('customer') || email.includes('aarav') ? 'customer' : 'farmer');
+        login(targetRole, email);
+        return { success: true };
       }
       // Store JWT token and user profile
       const { access_token, user: backendUser } = res.data;
       setToken(access_token);
-      setUser(toUserProfile(backendUser));
+      setUser(toUserProfile(backendUser, chosenRole));
       return { success: true };
     } catch {
-      // Network error — backend is probably down, use demo
       console.warn('Backend unreachable, using demo login');
-      if (email.includes('farmer')) {
-        login('farmer', email);
-      } else {
-        login('customer', email);
-      }
+      const targetRole = chosenRole || (email.includes('customer') || email.includes('aarav') ? 'customer' : 'farmer');
+      login(targetRole, email);
       return { success: true };
     }
   };
 
   const loginAsDemoFarmer = () => {
-    setUser(DEMO_FARMER);
+    setUser({ ...DEMO_FARMER, role: 'farmer' });
   };
 
   const loginAsDemoCustomer = () => {
-    setUser(DEMO_CUSTOMER);
+    setUser({ ...DEMO_CUSTOMER, role: 'customer' });
   };
 
   /**
@@ -139,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: UserRole;
     phone?: string;
     location: string;
+    avatar?: string;
   }): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await api.auth.register({
@@ -148,11 +156,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: data.role,
         phone: data.phone,
         location: data.location,
+        avatar: data.avatar,
       });
 
       if (res.error) {
         console.warn('Backend register failed, using local fallback:', res.error);
-        // Fall back to local registration
         const newUser: UserProfile = {
           id: `user_${Date.now()}`,
           name: data.name,
@@ -160,7 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: data.role,
           phone: data.phone || '+91 98000 00000',
           location: data.location || 'Gujarat, India',
-          avatar: data.role === 'farmer' ? DEMO_FARMER.avatar : DEMO_CUSTOMER.avatar,
+          avatar: data.avatar || (data.role === 'farmer' ? DEMO_FARMER.avatar : DEMO_CUSTOMER.avatar),
           farmName: data.role === 'farmer' ? `${data.name}'s Green Field` : undefined,
           totalArea: data.role === 'farmer' ? '10 Acres' : undefined,
           rating: 5.0,
@@ -172,10 +180,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const { access_token, user: backendUser } = res.data;
       setToken(access_token);
-      setUser(toUserProfile(backendUser, data.role));
+      setUser(toUserProfile({ ...backendUser, avatar: data.avatar || backendUser.avatar }, data.role));
       return { success: true };
     } catch {
-      // Fallback to local
       const newUser: UserProfile = {
         id: `user_${Date.now()}`,
         name: data.name,
@@ -183,7 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: data.role,
         phone: data.phone || '+91 98000 00000',
         location: data.location || 'Gujarat, India',
-        avatar: data.role === 'farmer' ? DEMO_FARMER.avatar : DEMO_CUSTOMER.avatar,
+        avatar: data.avatar || (data.role === 'farmer' ? DEMO_FARMER.avatar : DEMO_CUSTOMER.avatar),
         farmName: data.role === 'farmer' ? `${data.name}'s Green Field` : undefined,
         totalArea: data.role === 'farmer' ? '10 Acres' : undefined,
         rating: 5.0,

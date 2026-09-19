@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { useAuth } from '../../lib/auth';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
@@ -26,15 +26,54 @@ import {
   MOCK_CROPS_DATASET
 } from '../../lib/mock-data';
 import { UserProfileModal } from '../../components/common/UserProfileModal';
+import { api } from '../../lib/api';
 
 export const FarmerDashboardPage: React.FC = () => {
   const { navigate } = useRouter();
   const { user } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
 
+  const [weather, setWeather] = useState(MOCK_WEATHER);
+  const [marketPrices, setMarketPrices] = useState(MOCK_MARKET_PRICES);
+
   // Interactive task completion state
   const [tasks, setTasks] = useState(MOCK_TODAYS_TASKS);
   const [activeCropIndex, setActiveCropIndex] = useState(0);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchDashboardData = async () => {
+      try {
+        const [wRes, mRes] = await Promise.all([
+          api.weather.current('Gujarat', 'Surat'),
+          api.market.prices('', 10)
+        ]);
+
+        if (!isCancelled) {
+          if (wRes.data) {
+            setWeather(prev => ({
+              ...prev,
+              temperature: wRes.data.temperature || prev.temperature,
+              condition: wRes.data.condition || prev.condition,
+              humidity: wRes.data.humidity ?? prev.humidity,
+              windSpeed: wRes.data.windSpeed ?? prev.windSpeed,
+              rainChance: wRes.data.rainChance ?? prev.rainChance,
+            }));
+          }
+          if (mRes.data?.prices && mRes.data.prices.length > 0) {
+            setMarketPrices(mRes.data.prices);
+          }
+        }
+      } catch (err) {
+        console.warn('Dashboard backend telemetry fallback:', err);
+      }
+    };
+
+    fetchDashboardData();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const completedCount = tasks.filter(t => t.completed).length;
   const pendingCount = tasks.length - completedCount;
@@ -45,7 +84,7 @@ export const FarmerDashboardPage: React.FC = () => {
     );
   };
 
-  const selectedCropPrice = MOCK_MARKET_PRICES[activeCropIndex % MOCK_MARKET_PRICES.length];
+  const selectedCropPrice = marketPrices[activeCropIndex % marketPrices.length] || MOCK_MARKET_PRICES[0];
 
   return (
     <div className="flex min-h-screen">

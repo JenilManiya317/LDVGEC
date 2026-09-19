@@ -29,6 +29,7 @@ class RegisterRequest(BaseModel):
     role: str  # 'farmer' or 'customer'
     phone: Optional[str] = ""
     location: Optional[str] = ""
+    avatar: Optional[str] = ""
     farm_name: Optional[str] = ""
     total_area: Optional[str] = ""
 
@@ -111,9 +112,9 @@ async def register(req: RegisterRequest, db=Depends(get_db)):
     password_hash = pwd_context.hash(req.password)
 
     await db.execute(
-        """INSERT INTO users (name, email, password_hash, role, phone, location, farm_name, total_area)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (req.name, req.email, password_hash, req.role, req.phone, req.location, req.farm_name, req.total_area),
+        """INSERT INTO users (name, email, password_hash, role, phone, location, avatar, farm_name, total_area)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (req.name, req.email, password_hash, req.role, req.phone, req.location, req.avatar, req.farm_name, req.total_area),
     )
     await db.commit()
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
 import { GlassCard } from '../../components/common/GlassCard';
@@ -6,13 +6,37 @@ import { GlassButton } from '../../components/common/GlassButton';
 import { TrendingUp, Clock, MapPin, Search, PlusCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { MOCK_MARKET_PRICES } from '../../lib/mock-data';
 import { MarketPriceItem } from '../../lib/types';
+import { api } from '../../lib/api';
 
 export const MarketPricePage: React.FC = () => {
   const { navigate } = useRouter();
+  const [pricesList, setPricesList] = useState<MarketPriceItem[]>(MOCK_MARKET_PRICES);
   const [selectedCrop, setSelectedCrop] = useState<MarketPriceItem>(MOCK_MARKET_PRICES[0]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredPrices = MOCK_MARKET_PRICES.filter(
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchPrices = async () => {
+      try {
+        const res = await api.market.prices(searchQuery, 50);
+        if (!isCancelled && res.data?.prices && res.data.prices.length > 0) {
+          setPricesList(res.data.prices);
+          if (!selectedCrop || !res.data.prices.some((p: any) => p.id === selectedCrop.id)) {
+            setSelectedCrop(res.data.prices[0]);
+          }
+        }
+      } catch (err) {
+        console.warn('Market prices error:', err);
+      }
+    };
+
+    fetchPrices();
+    return () => {
+      isCancelled = true;
+    };
+  }, [searchQuery]);
+
+  const filteredPrices = pricesList.filter(
     (p) =>
       p.cropName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.marketLocation || p.mandiLocation || '').toLowerCase().includes(searchQuery.toLowerCase())

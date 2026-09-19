@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
 import { GlassCard } from '../../components/common/GlassCard';
 import { GlassButton } from '../../components/common/GlassButton';
-import { Sprout, Check, ArrowRight, ArrowLeft, Trees, Sparkles, CheckCircle2, ShieldCheck, Droplets } from 'lucide-react';
+import { Sprout, Check, ArrowRight, ArrowLeft, Trees, Sparkles, CheckCircle2, ShieldCheck, Droplets, Cpu } from 'lucide-react';
+import { api } from '../../lib/api';
 
 export const FarmCropSetupPage: React.FC = () => {
   const { navigate } = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [mlYield, setMlYield] = useState<number | null>(null);
+  const [modelUsed, setModelUsed] = useState<string>('RandomForest ML');
 
   // Form states based on agricultural dataset parameters
   const [farmData, setFarmData] = useState({
@@ -33,8 +37,50 @@ export const FarmCropSetupPage: React.FC = () => {
   });
 
   const areaNum = parseFloat(cropData.area) || 3.5;
-  const estYieldQtl = (areaNum * 24.2).toFixed(1);
+  const estYieldQtl = mlYield !== null ? mlYield.toFixed(1) : (areaNum * 24.2).toFixed(1);
   const waterReqLitres = Math.round(areaNum * 2200);
+
+  // Call backend ML Prediction model
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchPrediction = async () => {
+      setIsPredicting(true);
+      try {
+        const res = await api.predict.yield({
+          Crop: cropData.crop,
+          Season: cropData.season,
+          State: farmData.state || 'Gujarat',
+          Area: areaNum * 0.404686, // convert acres to hectares for ML model
+          Annual_Rainfall: 1000,
+          Fertilizer: areaNum * 120,
+          Pesticide: areaNum * 15,
+          Temperature_C: 28,
+          Humidity_Percent: 65,
+          Soil_Type: farmData.soilType.includes('Cotton') ? 'Black' : 'Loamy',
+          Soil_pH: parseFloat(cropData.soilPh) || 6.5,
+          Soil_Moisture_Percent: parseFloat(cropData.moistureTarget) || 60,
+          Irrigation_Type: farmData.irrigationType.includes('Drip') ? 'Drip' : 'Canal',
+        });
+
+        if (!isCancelled && res.data?.predicted_yield) {
+          // Model returns total production in quintals/metric tons
+          setMlYield(res.data.predicted_yield);
+          if (res.data.model_used) {
+            setModelUsed(res.data.model_used);
+          }
+        }
+      } catch (err) {
+        console.warn('Backend ML prediction fallback:', err);
+      } finally {
+        if (!isCancelled) setIsPredicting(false);
+      }
+    };
+
+    fetchPrediction();
+    return () => {
+      isCancelled = true;
+    };
+  }, [cropData.crop, cropData.season, cropData.area, cropData.soilPh, farmData.state, farmData.soilType, farmData.irrigationType]);
 
   const handleSave = () => {
     setSavedSuccess(true);
@@ -231,9 +277,15 @@ export const FarmCropSetupPage: React.FC = () => {
 
             {/* Live Real-time Agricultural Calculations Card */}
             <div className="p-4 rounded-2xl glass-surface border border-white/20">
-              <span className="text-xs font-bold text-white block mb-2">
-                Live Precision Agricultural Projections
-              </span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-white">
+                  Live Precision Agricultural Projections
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30 flex items-center gap-1">
+                  <Cpu className="w-3 h-3 text-white" />
+                  {isPredicting ? 'Computing ML...' : `${modelUsed} Pipeline`}
+                </span>
+              </div>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="p-2.5 rounded-xl glass-surface-subtle">
                   <span className="text-[10px] text-white/70 font-bold block">Estimated Production</span>

@@ -18,21 +18,36 @@ import { DEMO_FARMER } from '../../lib/mock-data';
 
 export const FarmerLoginPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { login, loginAsDemoFarmer } = useAuth();
+  const { login, loginWithCredentials, loginAsDemoFarmer } = useAuth();
 
   const [identifier, setIdentifier] = useState(DEMO_FARMER.email);
   const [password, setPassword] = useState('demo1234');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) {
       setError('Please enter your email or mobile number.');
       return;
     }
-    login('farmer', identifier, DEMO_FARMER.name);
-    navigate('/farmer/dashboard');
+    setError('');
+    setIsLoading(true);
+    try {
+      const res = await loginWithCredentials(identifier, password, 'farmer');
+      if (res.success) {
+        navigate('/farmer/dashboard');
+      } else {
+        setError(res.error || 'Invalid credentials. Please try again.');
+      }
+    } catch {
+      // Fallback
+      login('farmer', identifier, DEMO_FARMER.name);
+      navigate('/farmer/dashboard');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -200,10 +215,11 @@ export const FarmerLoginPage: React.FC = () => {
                 <button
                   type="submit"
                   id="farmer-login-btn"
-                  className="w-full py-3.5 px-6 rounded-2xl glass-btn-primary text-white font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer select-none"
+                  disabled={isLoading}
+                  className="w-full py-3.5 px-6 rounded-2xl glass-btn-primary text-white font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-60"
                 >
-                  <span>Log In to Farmer Station</span>
-                  <ArrowRight className="w-4 h-4 text-white" />
+                  <span>{isLoading ? 'Verifying Credentials...' : 'Log In to Farmer Station'}</span>
+                  {!isLoading && <ArrowRight className="w-4 h-4 text-white" />}
                 </button>
               </div>
 

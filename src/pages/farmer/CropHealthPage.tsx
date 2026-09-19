@@ -5,6 +5,8 @@ import { GlassCard } from '../../components/common/GlassCard';
 import { GlassButton } from '../../components/common/GlassButton';
 import { ScanEye, UploadCloud, Image as ImageIcon, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
 
+import { api } from '../../lib/api';
+
 export const CropHealthPage: React.FC = () => {
   const { navigate } = useRouter();
 
@@ -31,6 +33,7 @@ export const CropHealthPage: React.FC = () => {
 
   const [selectedImage, setSelectedImage] = useState<string>(sampleImages[0].url);
   const [selectedTitle, setSelectedTitle] = useState<string>(sampleImages[0].title);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
 
@@ -38,28 +41,37 @@ export const CropHealthPage: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const url = URL.createObjectURL(file);
+      setSelectedFile(file);
       setSelectedImage(url);
       setSelectedTitle(file.name.replace(/\.[^/.]+$/, ''));
     }
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     setAnalyzing(true);
-    setScanProgress(15);
+    setScanProgress(20);
 
-    const interval = setInterval(() => {
-      setScanProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setAnalyzing(false);
-            navigate('/farmer/crop-health/result');
-          }, 300);
-          return 100;
+    const progressInterval = setInterval(() => {
+      setScanProgress((prev) => (prev < 85 ? prev + 15 : prev));
+    }, 200);
+
+    try {
+      if (selectedFile) {
+        const res = await api.cropHealth.analyze(selectedFile);
+        if (res.data?.analysis) {
+          localStorage.setItem('farmwise_last_crop_health', JSON.stringify(res.data.analysis));
         }
-        return prev + 25;
-      });
-    }, 280);
+      }
+    } catch (err) {
+      console.warn('Backend crop health error:', err);
+    } finally {
+      clearInterval(progressInterval);
+      setScanProgress(100);
+      setTimeout(() => {
+        setAnalyzing(false);
+        navigate('/farmer/crop-health/result');
+      }, 400);
+    }
   };
 
   return (

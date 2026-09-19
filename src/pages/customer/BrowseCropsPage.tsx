@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { CustomerNavbar } from '../../components/layout/CustomerNavbar';
 import { GlassCard } from '../../components/common/GlassCard';
 import { useCart } from '../../lib/cart';
 import { Search, MapPin, Star, ShoppingCart, Check, Sparkles } from 'lucide-react';
 import { MOCK_PRODUCTS } from '../../lib/mock-data';
+import { ProductItem } from '../../lib/types';
+import { api } from '../../lib/api';
 
 export const BrowseCropsPage: React.FC = () => {
   const { navigate } = useRouter();
   const { addItem } = useCart();
+  const [productsList, setProductsList] = useState<ProductItem[]>(MOCK_PRODUCTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [maxPrice, setMaxPrice] = useState<number>(150);
@@ -16,7 +19,55 @@ export const BrowseCropsPage: React.FC = () => {
 
   const categories = ['All', 'Vegetables', 'Fruits', 'Grains', 'Organic'];
 
-  const filtered = MOCK_PRODUCTS.filter((prod) => {
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchListings = async () => {
+      try {
+        const catParam = selectedCategory === 'All' || selectedCategory === 'Organic' ? '' : selectedCategory;
+        const res = await api.marketplace.listings(catParam, searchQuery);
+        if (!isCancelled && res.data?.listings && res.data.listings.length > 0) {
+          const backendProducts: ProductItem[] = res.data.listings.map((row: any) => ({
+            id: String(row.id),
+            name: row.crop_name || row.name || 'Produce',
+            category: row.category || 'Vegetables',
+            pricePerKg: row.price_per_kg ?? 30,
+            unit: row.unit || 'kg',
+            imageUrl: row.image_url || 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=85',
+            farmerId: String(row.farmer_id || '1'),
+            farmerName: row.farmer_name || 'Rudra Patel',
+            farmName: row.farm_name || 'Patel Organic Farms',
+            location: row.farmer_location || 'Surat, Gujarat',
+            farmerAvatar: row.farmer_avatar || '/images/farmer-portrait.jpg',
+            rating: row.farmer_rating || 4.9,
+            reviewsCount: row.farmer_reviews_count || 12,
+            availableStockKg: row.available_stock_kg ?? 200,
+            quantityAvailableKg: row.available_stock_kg ?? 200,
+            description: row.description || '',
+            variety: row.variety || 'Hybrid Fresh Pick',
+            isOrganic: Boolean(row.is_organic),
+            harvestDate: row.harvest_date || 'Today',
+          }));
+          // Merge with mock products ensuring no duplicates
+          const combined = [...backendProducts];
+          for (const mp of MOCK_PRODUCTS) {
+            if (!combined.some(p => p.name.toLowerCase() === mp.name.toLowerCase())) {
+              combined.push(mp);
+            }
+          }
+          setProductsList(combined);
+        }
+      } catch (err) {
+        console.warn('Marketplace listings fetch fallback:', err);
+      }
+    };
+
+    fetchListings();
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedCategory, searchQuery]);
+
+  const filtered = productsList.filter((prod) => {
     const matchesCategory =
       selectedCategory === 'All'
         ? true

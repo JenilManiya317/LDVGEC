@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
-import { Sprout, Menu, X, Sparkles } from 'lucide-react';
+import { Sprout, Menu, X, Sparkles, LayoutDashboard } from 'lucide-react';
 import { useRouter } from '../../lib/router';
+import { useAuth } from '../../lib/auth';
 import { GlassButton } from '../common/GlassButton';
 
 export const Navbar: React.FC = () => {
   const { navigate } = useRouter();
+  const { user, isAuthenticated, role } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handlePortalClick = () => {
+    if (isAuthenticated) {
+      if (role === 'farmer') {
+        navigate('/farmer/dashboard');
+      } else {
+        navigate('/customer/dashboard');
+      }
+    } else {
+      navigate('/choose-user');
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 w-full px-4 sm:px-8 py-3.5 transition-all duration-300">
@@ -67,10 +81,10 @@ export const Navbar: React.FC = () => {
             id="nav-access-portal-btn"
             variant="primary"
             size="sm"
-            onClick={() => navigate('/choose-user')}
-            icon={<Sparkles className="w-3.5 h-3.5 text-white" />}
+            onClick={handlePortalClick}
+            icon={isAuthenticated ? <LayoutDashboard className="w-3.5 h-3.5 text-white" /> : <Sparkles className="w-3.5 h-3.5 text-white" />}
           >
-            Get Started
+            {isAuthenticated ? (role === 'farmer' ? 'Farmer Station' : 'Customer Market') : 'Get Started'}
           </GlassButton>
         </div>
 
@@ -125,11 +139,11 @@ export const Navbar: React.FC = () => {
                 variant="primary"
                 className="w-full"
                 onClick={() => {
-                  navigate('/choose-user');
+                  handlePortalClick();
                   setMobileMenuOpen(false);
                 }}
               >
-                Access Platform
+                {isAuthenticated ? (role === 'farmer' ? 'Farmer Station' : 'Customer Market') : 'Access Platform'}
               </GlassButton>
             </div>
           </div>

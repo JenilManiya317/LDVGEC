@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
 import { GlassCard } from '../../components/common/GlassCard';
@@ -18,12 +18,55 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { MOCK_WEATHER, MOCK_ADVISORY } from '../../lib/mock-data';
+import { api } from '../../lib/api';
 
 export const WeatherAdvisoryPage: React.FC = () => {
   const { navigate } = useRouter();
   const [activeTab, setActiveTab] = useState<'irrigation' | 'fertilizer' | 'pest' | 'harvest'>('irrigation');
+  const [weatherData, setWeatherData] = useState(MOCK_WEATHER);
+  const [advisoryData, setAdvisoryData] = useState(MOCK_ADVISORY);
 
-  const advisory = MOCK_ADVISORY[activeTab];
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchWeather = async () => {
+      try {
+        const [currentRes, forecastRes, advRes] = await Promise.all([
+          api.weather.current('Gujarat', 'Surat'),
+          api.weather.forecast('Gujarat', 5),
+          api.weather.advisory('Gujarat', 'Tomato', 'Kharif')
+        ]);
+
+        if (!isCancelled) {
+          if (currentRes.data) {
+            setWeatherData((prev) => ({
+              ...prev,
+              temperature: currentRes.data.temperature || prev.temperature,
+              condition: currentRes.data.condition || prev.condition,
+              humidity: currentRes.data.humidity ?? prev.humidity,
+              windSpeed: currentRes.data.windSpeed ?? prev.windSpeed,
+              rainChance: currentRes.data.rainChance ?? prev.rainChance,
+              forecast: forecastRes.data?.forecast || prev.forecast,
+            }));
+          }
+          if (advRes.data?.advisory) {
+            setAdvisoryData((prev) => ({
+              ...prev,
+              ...advRes.data.advisory,
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Weather fetch error:', err);
+      }
+    };
+
+    fetchWeather();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const advisory = advisoryData[activeTab] || MOCK_ADVISORY[activeTab];
 
   return (
     <div className="flex min-h-screen text-white">
@@ -56,10 +99,10 @@ export const WeatherAdvisoryPage: React.FC = () => {
                   Current Field Station
                 </span>
                 <div className="text-5xl font-black text-white tracking-tight mt-1">
-                  <AnimatedCounter value={MOCK_WEATHER.temperature} suffix="°C" duration={800} />
+                  <AnimatedCounter value={weatherData.temperature} suffix="°C" duration={800} />
                 </div>
                 <div className="text-sm font-bold text-white mt-0.5">
-                  {MOCK_WEATHER.condition}
+                  {weatherData.condition}
                 </div>
               </div>
             </div>
@@ -69,19 +112,19 @@ export const WeatherAdvisoryPage: React.FC = () => {
               <div className="p-3.5 rounded-2xl glass-surface-subtle border border-white/20 text-center">
                 <Droplets className="w-4 h-4 text-blue-300 mx-auto mb-1" />
                 <span className="text-[11px] font-bold text-white/80 block">Humidity</span>
-                <span className="text-base font-black text-white">{MOCK_WEATHER.humidity}%</span>
+                <span className="text-base font-black text-white">{weatherData.humidity}%</span>
               </div>
 
               <div className="p-3.5 rounded-2xl glass-surface-subtle border border-white/20 text-center">
                 <Wind className="w-4 h-4 text-white mx-auto mb-1" />
                 <span className="text-[11px] font-bold text-white/80 block">Wind</span>
-                <span className="text-base font-black text-white">{MOCK_WEATHER.windSpeed} km/h</span>
+                <span className="text-base font-black text-white">{weatherData.windSpeed} km/h</span>
               </div>
 
               <div className="p-3.5 rounded-2xl glass-surface-subtle border border-white/20 text-center">
                 <Umbrella className="w-4 h-4 text-white mx-auto mb-1" />
                 <span className="text-[11px] font-bold text-white/80 block">Rain Chance</span>
-                <span className="text-base font-black text-white">{MOCK_WEATHER.rainChance}%</span>
+                <span className="text-base font-black text-white">{weatherData.rainChance}%</span>
               </div>
             </div>
           </div>
@@ -92,7 +135,7 @@ export const WeatherAdvisoryPage: React.FC = () => {
               5-Day Agronomic Forecast
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-              {MOCK_WEATHER.forecast.map((f, i) => (
+              {weatherData.forecast.map((f, i) => (
                 <div key={i} className="p-3 rounded-2xl glass-surface-subtle border border-white/20">
                   <div className="font-bold text-white">{f.day}</div>
                   <div className="text-base font-black text-white my-1">{f.temp}°C</div>
