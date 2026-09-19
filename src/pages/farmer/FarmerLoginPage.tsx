@@ -35,15 +35,14 @@ export const FarmerLoginPage: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      const res = await loginWithCredentials(identifier, password);
+      const res = await loginWithCredentials(identifier, password, 'farmer');
       if (res.success) {
         navigate('/farmer/dashboard');
       } else {
-        setError(res.error || 'Login failed.');
+        setError(res.error || 'Invalid credentials. Please register first or check your details.');
       }
     } catch {
-      login('farmer', identifier, DEMO_FARMER.name);
-      navigate('/farmer/dashboard');
+      setError('Connection error. Please ensure backend server is running.');
     } finally {
       setIsLoading(false);
     }

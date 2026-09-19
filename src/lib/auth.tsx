@@ -78,29 +78,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Quick login with demo data (no backend call) — used for role selection.
+   * Quick login with demo data — automatically authenticates with backend API to obtain JWT token for MongoDB Atlas.
    */
-  const login = (chosenRole: UserRole, email?: string, name?: string) => {
+  const login = async (chosenRole: UserRole, email?: string, name?: string) => {
+    const demoEmail = email || (chosenRole === 'farmer' ? DEMO_FARMER.email : DEMO_CUSTOMER.email);
+    const demoName = name || (chosenRole === 'farmer' ? DEMO_FARMER.name : DEMO_CUSTOMER.name);
+    const demoPassword = 'demo1234';
+
+    // Set local fallback state first so UI updates immediately
     if (chosenRole === 'farmer') {
-      setUser({
-        ...DEMO_FARMER,
-        email: email || DEMO_FARMER.email,
-        name: name || DEMO_FARMER.name,
-        role: 'farmer'
-      });
+      setUser({ ...DEMO_FARMER, email: demoEmail, name: demoName, role: 'farmer' });
     } else {
-      setUser({
-        ...DEMO_CUSTOMER,
-        email: email || DEMO_CUSTOMER.email,
-        name: name || DEMO_CUSTOMER.name,
-        role: 'customer'
-      });
+      setUser({ ...DEMO_CUSTOMER, email: demoEmail, name: demoName, role: 'customer' });
+    }
+
+    // Authenticate with backend API to obtain a real JWT token for MongoDB isolation
+    try {
+      let res = await api.auth.login(demoEmail, demoPassword);
+      if (res.error) {
+        // Attempt auto-registration for demo account on backend
+        const regRes = await api.auth.register({
+          name: demoName,
+          email: demoEmail,
+          password: demoPassword,
+          role: chosenRole,
+          phone: chosenRole === 'farmer' ? DEMO_FARMER.phone : DEMO_CUSTOMER.phone,
+          location: chosenRole === 'farmer' ? DEMO_FARMER.location : DEMO_CUSTOMER.location,
+        });
+        if (regRes.data?.access_token) {
+          setToken(regRes.data.access_token);
+          if (regRes.data.user) {
+            setUser(toUserProfile(regRes.data.user, chosenRole));
+          }
+        }
+      } else if (res.data?.access_token) {
+        setToken(res.data.access_token);
+        if (res.data.user) {
+          setUser(toUserProfile(res.data.user, chosenRole));
+        }
+      }
+    } catch (err) {
+      console.warn('Demo backend authentication fallback:', err);
     }
   };
 
   /**
    * Login with email/password via the backend API.
-   * Enforces chosenRole so a farmer always accesses the farmer workspace.
+   * Enforces strict MongoDB authentication and JWT token storage.
    */
   const loginWithCredentials = async (
     email: string,
@@ -110,30 +134,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.auth.login(email, password);
       if (res.error) {
-        console.warn('Backend login error, using fallback:', res.error);
-        const targetRole = chosenRole || (email.includes('customer') || email.includes('aarav') ? 'customer' : 'farmer');
-        login(targetRole, email);
-        return { success: true };
+        return { success: false, error: res.error };
       }
-      // Store JWT token and user profile
+      if (!res.data?.access_token) {
+        return { success: false, error: 'No authentication token received from server.' };
+      }
+      // Store JWT token and user profile in localStorage and React state
       const { access_token, user: backendUser } = res.data;
       setToken(access_token);
       setUser(toUserProfile(backendUser, chosenRole));
       return { success: true };
-    } catch {
-      console.warn('Backend unreachable, using demo login');
-      const targetRole = chosenRole || (email.includes('customer') || email.includes('aarav') ? 'customer' : 'farmer');
-      login(targetRole, email);
-      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Unable to connect to authentication server.' };
     }
   };
 
   const loginAsDemoFarmer = () => {
-    setUser({ ...DEMO_FARMER, role: 'farmer' });
+    login('farmer');
   };
 
   const loginAsDemoCustomer = () => {
-    setUser({ ...DEMO_CUSTOMER, role: 'customer' });
+    login('customer');
   };
 
   /**

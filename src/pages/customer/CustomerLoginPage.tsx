@@ -34,15 +34,14 @@ export const CustomerLoginPage: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      const res = await loginWithCredentials(identifier, password);
+      const res = await loginWithCredentials(identifier, password, 'customer');
       if (res.success) {
         navigate('/customer/dashboard');
       } else {
-        setError(res.error || 'Login failed.');
+        setError(res.error || 'Invalid credentials. Please register first or check your details.');
       }
     } catch {
-      login('customer', identifier, DEMO_CUSTOMER.name);
-      navigate('/customer/dashboard');
+      setError('Connection error. Please ensure backend server is running.');
     } finally {
       setIsLoading(false);
     }
