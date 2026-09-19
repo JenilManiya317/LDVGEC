@@ -1,0 +1,8 @@
+catboost_info/
+reports/
+node_modules/
+dist/
+.git/
+.env
+.env.example
+*.md
