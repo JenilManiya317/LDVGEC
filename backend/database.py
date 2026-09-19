@@ -18,11 +18,21 @@ client: Optional[AsyncIOMotorClient] = None
 db = None
 
 
+from fastapi import HTTPException
+
 async def get_db():
     """FastAPI dependency yielding the MongoDB database instance."""
     global db
     if db is None:
-        await init_db()
+        try:
+            await init_db()
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB: {e}")
+    if db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="MongoDB database connection unavailable. Please verify MONGODB_URI in your Render environment variables and set 0.0.0.0/0 in MongoDB Atlas Network Access."
+        )
     return db
 
 

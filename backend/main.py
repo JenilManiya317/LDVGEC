@@ -78,6 +78,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import JSONResponse
+from pymongo.errors import PyMongoError
+
+@app.exception_handler(PyMongoError)
+async def pymongo_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "MongoDB connection error. Please verify MONGODB_URI in your Render environment variables and set 0.0.0.0/0 in MongoDB Atlas Network Access."},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    logger.error(f"Unhandled server error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Backend processing error: {str(exc)}"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+
 # Register routers
 from backend.routers import auth, farm, predict, crop_health, weather, market, marketplace
 
