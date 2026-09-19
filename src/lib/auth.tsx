@@ -21,8 +21,12 @@ interface AuthContextType {
     avatar?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (data: Partial<UserProfile> & { farmName?: string; totalArea?: string }) => Promise<{ success: boolean; error?: string }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
+  sendOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resendOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -74,8 +78,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       totalArea: backendUser.total_area || undefined,
       rating: backendUser.rating || 0,
       reviewsCount: backendUser.reviews_count || 0,
+      isEmailVerified: backendUser.is_email_verified ?? backendUser.isEmailVerified ?? false,
     };
   };
+
 
   /**
    * Quick login with demo data — automatically authenticates with backend API to obtain JWT token for MongoDB Atlas.
@@ -248,6 +254,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
+  const sendOtp = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.auth.sendOtp(email);
+      if (res.error) {
+        return { success: false, error: res.error };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to send OTP.' };
+    }
+  };
+
+  const verifyOtp = async (email: string, otp: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.auth.verifyOtp(email, otp);
+      if (res.error) {
+        return { success: false, error: res.error };
+      }
+      if (user && user.email.toLowerCase() === email.toLowerCase()) {
+        setUser({ ...user, isEmailVerified: true });
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Verification failed.' };
+    }
+  };
+
+  const resendOtp = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.auth.resendOtp(email);
+      if (res.error) {
+        return { success: false, error: res.error };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to resend OTP.' };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     clearToken();
@@ -266,6 +311,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAsDemoCustomer,
         register,
         updateProfile,
+        sendOtp,
+        verifyOtp,
+        resendOtp,
         logout
       }}
     >
@@ -273,6 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
+
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

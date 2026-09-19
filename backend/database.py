@@ -130,4 +130,8 @@ def format_doc(doc: Optional[dict]) -> Optional[dict]:
     if "password_hash" in formatted:
         formatted.pop("password_hash", None)
 
+    if "otp_hash" in formatted:
+        formatted.pop("otp_hash", None)
+
     return formatted
+

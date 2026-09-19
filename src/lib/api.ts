@@ -170,7 +170,17 @@ export const api = {
 
     updateProfile: (data: Record<string, any>) =>
       request('PUT', '/api/auth/profile', data),
+
+    sendOtp: (email: string) =>
+      request('POST', '/api/auth/send-otp', { email }),
+
+    verifyOtp: (email: string, otp: string) =>
+      request('POST', '/api/auth/verify-otp', { email, otp }),
+
+    resendOtp: (email: string) =>
+      request('POST', '/api/auth/resend-otp', { email }),
   },
+
 
   // --- Farmer & Farm Profiles ---
   farm: {

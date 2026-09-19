@@ -45,3 +45,18 @@ CORS_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
+
+# --- Email / SMTP ---
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_SECURE = os.getenv("SMTP_SECURE", "true").lower() in ("true", "1", "yes")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "ddoinfo098@gmail.com")
+SMTP_USER = os.getenv("SMTP_USER", SENDER_EMAIL)
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+
+# --- Brevo API Key ---
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+
+
+
+

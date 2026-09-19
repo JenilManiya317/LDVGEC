@@ -16,8 +16,12 @@ import {
   Truck,
   LogIn,
   UserPlus,
-  Camera
+  Camera,
+  Check
 } from 'lucide-react';
+
+
+import { OtpVerificationModal } from '../../components/auth/OtpVerificationModal';
 
 const PRESET_CUSTOMER_AVATARS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
@@ -28,7 +32,7 @@ const PRESET_CUSTOMER_AVATARS = [
 
 export const CustomerRegisterPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { register } = useAuth();
+  const { register, sendOtp } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -42,6 +46,31 @@ export const CustomerRegisterPage: React.FC = () => {
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isSendingInlineOtp, setIsSendingInlineOtp] = useState(false);
+
+  const handleInlineVerifyClick = async () => {
+    if (!formData.email || !formData.email.includes('@')) {
+      setError('Please enter a valid email address first.');
+      return;
+    }
+    setError('');
+    setIsSendingInlineOtp(true);
+    try {
+      const res = await sendOtp(formData.email);
+      if (res.success) {
+        setShowOtpModal(true);
+      } else {
+        setError(res.error || 'Failed to send OTP code.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP.');
+    } finally {
+      setIsSendingInlineOtp(false);
+    }
+  };
+
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -67,6 +96,20 @@ export const CustomerRegisterPage: React.FC = () => {
       return;
     }
 
+    if (!isEmailVerified) {
+      setError('Email verification required! Please enter the 6-digit OTP code sent to your email.');
+      setIsLoading(true);
+      try {
+        await sendOtp(formData.email);
+        setShowOtpModal(true);
+      } catch (err: any) {
+        setError(err.message || 'Failed to send OTP code.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     setError('');
     setIsLoading(true);
     try {
@@ -85,11 +128,13 @@ export const CustomerRegisterPage: React.FC = () => {
         setError(res.error || 'Registration failed. Please try again.');
       }
     } catch {
-      navigate('/customer/dashboard');
+      setError('Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
+
 
   return (
     <div className="min-h-screen flex flex-col justify-between p-4 sm:p-6 lg:p-8 text-white">
@@ -257,18 +302,45 @@ export const CustomerRegisterPage: React.FC = () => {
 
                 <div>
                   <label className="block text-[11px] font-bold text-white/80 mb-1">Email Address</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <div className="relative flex items-center">
+                    <Mail className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
                     <input
                       type="email"
                       required
                       placeholder="aarav@gmail.com"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full glass-input rounded-2xl py-2.5 pl-10 pr-3 text-xs font-bold text-white placeholder-white/60"
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        setIsEmailVerified(false);
+                      }}
+                      className="w-full glass-input rounded-2xl py-2.5 pl-10 pr-24 text-xs font-bold text-white placeholder-white/60"
                     />
+                    {isEmailVerified ? (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1 shadow-xs">
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Verified</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isSendingInlineOtp || !formData.email.includes('@')}
+                        onClick={handleInlineVerifyClick}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white text-[11px] font-extrabold transition-all cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        {isSendingInlineOtp ? (
+                          <span>Sending...</span>
+                        ) : (
+                          <span>Verify</span>
+                        )}
+                      </button>
+                    )}
                   </div>
+                  <p className="text-[10px] text-emerald-300/80 mt-1 font-semibold flex items-center gap-1">
+                    <span>📩 OTP sent to email — please check Inbox & Spam / Junk folder</span>
+                  </p>
                 </div>
+
+
 
                 <div>
                   <label className="block text-[11px] font-bold text-white/80 mb-1">Mobile Number</label>
@@ -352,6 +424,22 @@ export const CustomerRegisterPage: React.FC = () => {
       <div className="text-center text-xs text-white/70 py-2">
         AgriSetu © 2026. Dedicated to Indian Agriculture.
       </div>
+
+      {/* OTP Verification Modal */}
+      <OtpVerificationModal
+        email={formData.email}
+        isOpen={showOtpModal}
+        onClose={() => setShowOtpModal(false)}
+        onSuccess={() => {
+          setIsEmailVerified(true);
+          setShowOtpModal(false);
+          setError('');
+        }}
+      />
     </div>
   );
 };
+
+
+
+

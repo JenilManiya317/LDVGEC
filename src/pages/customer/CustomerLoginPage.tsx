@@ -19,8 +19,9 @@ export const CustomerLoginPage: React.FC = () => {
   const { navigate } = useRouter();
   const { login, loginWithCredentials, loginAsDemoCustomer } = useAuth();
 
-  const [identifier, setIdentifier] = useState(DEMO_CUSTOMER.email);
-  const [password, setPassword] = useState('demo1234');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);

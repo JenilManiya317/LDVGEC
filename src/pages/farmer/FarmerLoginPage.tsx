@@ -20,8 +20,9 @@ export const FarmerLoginPage: React.FC = () => {
   const { navigate } = useRouter();
   const { login, loginWithCredentials, loginAsDemoFarmer } = useAuth();
 
-  const [identifier, setIdentifier] = useState(DEMO_FARMER.email);
-  const [password, setPassword] = useState('demo1234');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);

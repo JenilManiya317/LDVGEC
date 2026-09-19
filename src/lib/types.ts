@@ -12,7 +12,9 @@ export interface UserProfile {
   totalArea?: string;
   rating?: number;
   reviewsCount?: number;
+  isEmailVerified?: boolean;
 }
+
 
 export interface FarmDetails {
   id: string;
