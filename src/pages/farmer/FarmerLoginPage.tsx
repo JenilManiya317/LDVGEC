@@ -18,21 +18,26 @@ import { DEMO_FARMER } from '../../lib/mock-data';
 
 export const FarmerLoginPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { login, loginAsDemoFarmer } = useAuth();
+  const { loginWithCredentials, loginAsDemoFarmer } = useAuth();
 
   const [identifier, setIdentifier] = useState(DEMO_FARMER.email);
   const [password, setPassword] = useState('demo1234');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
-      setError('Please enter your email or mobile number.');
+    if (!identifier.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
       return;
     }
-    login('farmer', identifier, DEMO_FARMER.name);
-    navigate('/farmer/dashboard');
+    setError('');
+    const res = await loginWithCredentials(identifier, password);
+    if (res.success) {
+      navigate('/farmer/dashboard');
+    } else {
+      setError(res.error || 'Login failed.');
+    }
   };
 
   return (

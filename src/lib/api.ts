@@ -160,7 +160,7 @@ export const api = {
       location?: string;
       farm_name?: string;
       total_area?: string;
-    }) => request('/api/auth/register', 'POST', data),
+    }) => request('POST', '/api/auth/register', data),
 
     login: (email: string, password: string) =>
       request('POST', '/api/auth/login', { email, password }),
@@ -171,10 +171,21 @@ export const api = {
       request('PUT', '/api/auth/profile', data),
   },
 
+  // --- Farmer & Farm Profiles ---
+  farm: {
+    getProfile: () => request('GET', '/api/farmer/farm'),
+    updateProfile: (data: Record<string, any>) => request('PUT', '/api/farmer/farm', data),
+    getCrops: () => request('GET', '/api/farmer/crops'),
+    addCrop: (data: Record<string, any>) => request('POST', '/api/farmer/crops', data),
+    deleteCrop: (cropId: string) => request('DELETE', `/api/farmer/crops/${cropId}`),
+  },
+
   // --- Yield Prediction ---
   predict: {
     yield: (data: Record<string, any>) =>
       request('POST', '/api/predict/yield', data),
+
+    history: () => request('GET', '/api/predict/history'),
 
     features: () => request('GET', '/api/predict/features'),
 
@@ -185,6 +196,8 @@ export const api = {
   cropHealth: {
     analyze: (imageFile: File) =>
       uploadFile('/api/crop-health/analyze', imageFile, 'image'),
+
+    history: () => request('GET', '/api/crop-health/history'),
   },
 
   // --- Weather ---
@@ -213,16 +226,16 @@ export const api = {
     listings: (category: string = '', search: string = '') =>
       request('GET', `/api/marketplace/listings?category=${encodeURIComponent(category)}&search=${encodeURIComponent(search)}`),
 
-    getListing: (id: number) =>
+    getListing: (id: string | number) =>
       request('GET', `/api/marketplace/listings/${id}`),
 
     createListing: (data: Record<string, any>) =>
       request('POST', '/api/marketplace/listings', data),
 
-    updateListing: (id: number, data: Record<string, any>) =>
+    updateListing: (id: string | number, data: Record<string, any>) =>
       request('PUT', `/api/marketplace/listings/${id}`, data),
 
-    deleteListing: (id: number) =>
+    deleteListing: (id: string | number) =>
       request('DELETE', `/api/marketplace/listings/${id}`),
   },
 
@@ -233,15 +246,15 @@ export const api = {
 
     list: () => request('GET', '/api/orders'),
 
-    get: (id: number) => request('GET', `/api/orders/${id}`),
+    get: (id: string | number) => request('GET', `/api/orders/${id}`),
 
-    updateStatus: (id: number, statusIndex: number) =>
+    updateStatus: (id: string | number, statusIndex: number) =>
       request('PUT', `/api/orders/${id}/status`, { current_status_index: statusIndex }),
   },
 
   // --- Reviews ---
   reviews: {
-    create: (orderId: number, rating: number, comment: string = '') =>
+    create: (orderId: string | number, rating: number, comment: string = '') =>
       request('POST', '/api/reviews', { order_id: orderId, rating, comment }),
   },
 };

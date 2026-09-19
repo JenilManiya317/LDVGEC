@@ -1,124 +1,133 @@
 """
-FarmWise Database Layer.
-SQLite database with async access via aiosqlite.
+FarmWise Database Layer — MongoDB async driver (Motor).
+Manages connection, indexes, and document formatting.
 """
 
-import aiosqlite
-from backend.config import DB_PATH
+import logging
+from typing import Optional, Any
+from bson import ObjectId
+from bson.errors import InvalidId
+from motor.motor_asyncio import AsyncIOMotorClient
 
-DATABASE_URL = str(DB_PATH)
+from backend.config import MONGODB_URI, MONGODB_DATABASE
+
+logger = logging.getLogger("farmwise.database")
+
+# Global client and database instances
+client: Optional[AsyncIOMotorClient] = None
+db = None
 
 
 async def get_db():
-    """Dependency that yields an async SQLite connection."""
-    db = await aiosqlite.connect(DATABASE_URL)
-    db.row_factory = aiosqlite.Row
-    try:
-        yield db
-    finally:
-        await db.close()
+    """FastAPI dependency yielding the MongoDB database instance."""
+    global db
+    if db is None:
+        await init_db()
+    return db
 
 
 async def init_db():
-    """Create all tables if they don't exist."""
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.executescript(SCHEMA_SQL)
-        await db.commit()
+    """Initialize MongoDB client connection and create collection indexes."""
+    global client, db
+    if client is None:
+        logger.info(f"Connecting to MongoDB at {MONGODB_URI} (Database: {MONGODB_DATABASE})")
+        client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=3000)
+        db = client[MONGODB_DATABASE]
+
+    # --- Create Indexes ---
+    try:
+        # 1. users: unique email
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("username")
+
+        # 2. farm_profiles: user_id
+        await db.farm_profiles.create_index("user_id")
+
+        # 3. crops: user_id
+        await db.crops.create_index("user_id")
+
+        # 4. predictions: user_id
+        await db.predictions.create_index("user_id")
+
+        # 5. crop_health: user_id
+        await db.crop_health.create_index("user_id")
+
+        # 6. market_data: user_id & cropName
+        await db.market_data.create_index("user_id")
+        await db.market_data.create_index("cropName")
+
+        # 7. crop_listings: user_id (seller)
+        await db.crop_listings.create_index("user_id")
+        await db.crop_listings.create_index("farmer_id")
+        await db.crop_listings.create_index("is_active")
+
+        # 8. orders: user_id (customer), farmer_id, order_number (unique)
+        await db.orders.create_index("user_id")
+        await db.orders.create_index("customer_id")
+        await db.orders.create_index("farmer_id")
+        await db.orders.create_index("order_number", unique=True)
+
+        # 9. order_items: order_id
+        await db.order_items.create_index("order_id")
+        await db.order_items.create_index("user_id")
+
+        # 10. reviews: user_id (customer), farmer_id, order_id
+        await db.reviews.create_index("user_id")
+        await db.reviews.create_index("customer_id")
+        await db.reviews.create_index("farmer_id")
+        await db.reviews.create_index("order_id")
+
+        logger.info("MongoDB connection initialized & collection indexes verified.")
+    except Exception as e:
+        logger.warning(f"Error creating MongoDB indexes (may already exist or server starting): {e}")
 
 
-SCHEMA_SQL = """
--- Users table (farmers and customers)
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('farmer', 'customer')),
-    phone TEXT DEFAULT '',
-    location TEXT DEFAULT '',
-    avatar TEXT DEFAULT '',
-    farm_name TEXT DEFAULT '',
-    total_area TEXT DEFAULT '',
-    rating REAL DEFAULT 0.0,
-    reviews_count INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+async def close_db():
+    """Close MongoDB client connection on shutdown."""
+    global client, db
+    if client:
+        client.close()
+        client = None
+        db = None
+        logger.info("MongoDB connection closed.")
 
--- Farm profiles
-CREATE TABLE IF NOT EXISTS farm_profiles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    total_area REAL DEFAULT 0,
-    state TEXT DEFAULT '',
-    district TEXT DEFAULT '',
-    soil_type TEXT DEFAULT '',
-    irrigation_type TEXT DEFAULT '',
-    location TEXT DEFAULT '',
-    active_crops TEXT DEFAULT '[]',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
--- Crop marketplace listings
-CREATE TABLE IF NOT EXISTS crop_listings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    farmer_id INTEGER NOT NULL REFERENCES users(id),
-    crop_name TEXT NOT NULL,
-    category TEXT DEFAULT 'Vegetables',
-    variety TEXT DEFAULT '',
-    description TEXT DEFAULT '',
-    price_per_kg REAL NOT NULL,
-    unit TEXT DEFAULT 'kg',
-    available_stock_kg REAL NOT NULL,
-    is_organic INTEGER DEFAULT 0,
-    harvest_date TEXT DEFAULT '',
-    image_url TEXT DEFAULT '',
-    is_active INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+def to_object_id(val: Any) -> Optional[ObjectId]:
+    """Convert string/ObjectId to ObjectId safely."""
+    if isinstance(val, ObjectId):
+        return val
+    if not val or not isinstance(val, str):
+        return None
+    try:
+        return ObjectId(val)
+    except InvalidId:
+        return None
 
--- Orders
-CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_number TEXT NOT NULL UNIQUE,
-    customer_id INTEGER NOT NULL REFERENCES users(id),
-    farmer_id INTEGER NOT NULL REFERENCES users(id),
-    subtotal REAL NOT NULL,
-    delivery_fee REAL DEFAULT 0,
-    total REAL NOT NULL,
-    payment_method TEXT DEFAULT 'Cash on Delivery',
-    payment_status TEXT DEFAULT 'Pending',
-    delivery_method TEXT DEFAULT 'Standard Delivery',
-    delivery_name TEXT DEFAULT '',
-    delivery_phone TEXT DEFAULT '',
-    delivery_address TEXT DEFAULT '',
-    delivery_city TEXT DEFAULT '',
-    delivery_state TEXT DEFAULT '',
-    delivery_pincode TEXT DEFAULT '',
-    current_status_index INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
--- Order items
-CREATE TABLE IF NOT EXISTS order_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_id INTEGER NOT NULL REFERENCES orders(id),
-    listing_id INTEGER NOT NULL REFERENCES crop_listings(id),
-    crop_name TEXT NOT NULL,
-    quantity_kg REAL NOT NULL,
-    price_per_kg REAL NOT NULL,
-    total_price REAL NOT NULL
-);
+def format_doc(doc: Optional[dict]) -> Optional[dict]:
+    """
+    Format a MongoDB document for JSON serialization:
+    - Replaces '_id' ObjectId with string 'id' and 'id' string.
+    - Converts any ObjectId reference fields (user_id, farmer_id, customer_id, order_id, listing_id) to str.
+    """
+    if doc is None:
+        return None
 
--- Reviews
-CREATE TABLE IF NOT EXISTS reviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_id INTEGER NOT NULL REFERENCES orders(id),
-    customer_id INTEGER NOT NULL REFERENCES users(id),
-    farmer_id INTEGER NOT NULL REFERENCES users(id),
-    rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
-    comment TEXT DEFAULT '',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-"""
+    formatted = {}
+    for key, value in doc.items():
+        if key == "_id":
+            formatted["id"] = str(value)
+            formatted["_id"] = str(value)
+        elif isinstance(value, ObjectId):
+            formatted[key] = str(value)
+        elif isinstance(value, list):
+            formatted[key] = [format_doc(item) if isinstance(item, dict) else (str(item) if isinstance(item, ObjectId) else item) for item in value]
+        elif isinstance(value, dict):
+            formatted[key] = format_doc(value)
+        else:
+            formatted[key] = value
+
+    if "password_hash" in formatted:
+        formatted.pop("password_hash", None)
+
+    return formatted

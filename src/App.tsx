@@ -5,7 +5,7 @@ import { RouterProvider, useRouter } from './lib/router';
 import { Background } from './components/layout/Background';
 
 // General Pages
-import { LandingPage } from './pages/LandingPage';
+import { LandingPage } from './pages/LandingPage.tsx';
 import { ChooseUserPage } from './pages/ChooseUserPage';
 
 // Farmer Pages

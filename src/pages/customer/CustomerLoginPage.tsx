@@ -17,21 +17,26 @@ import { DEMO_CUSTOMER } from '../../lib/mock-data';
 
 export const CustomerLoginPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { login, loginAsDemoCustomer } = useAuth();
+  const { loginWithCredentials, loginAsDemoCustomer } = useAuth();
 
   const [identifier, setIdentifier] = useState(DEMO_CUSTOMER.email);
   const [password, setPassword] = useState('demo1234');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
-      setError('Please enter your email or mobile number.');
+    if (!identifier.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
       return;
     }
-    login('customer', identifier, DEMO_CUSTOMER.name);
-    navigate('/customer/dashboard');
+    setError('');
+    const res = await loginWithCredentials(identifier, password);
+    if (res.success) {
+      navigate('/customer/dashboard');
+    } else {
+      setError(res.error || 'Login failed.');
+    }
   };
 
   return (

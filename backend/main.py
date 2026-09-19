@@ -1,6 +1,6 @@
 """
 FarmWise Backend — FastAPI Application Entry Point.
-Serves the ML crop-yield prediction pipeline and all REST APIs.
+Serves the ML crop-yield prediction pipeline, AI diagnostics, and MongoDB-backed REST APIs.
 """
 
 import logging
@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import CORS_ORIGINS
-from backend.database import init_db
+from backend.database import init_db, close_db
 from backend.ml.predictor import predictor
 
 # Configure logging
@@ -30,9 +30,9 @@ async def lifespan(app: FastAPI):
     logger.info("FarmWise Backend Starting...")
     logger.info("=" * 60)
 
-    # Initialize database
+    # Initialize MongoDB connection & indexes
     await init_db()
-    logger.info("Database initialized")
+    logger.info("MongoDB initialized & collection indexes verified.")
 
     # Load ML model
     model_loaded = predictor.load_model()
@@ -51,12 +51,13 @@ async def lifespan(app: FastAPI):
 
     # --- Shutdown ---
     logger.info("FarmWise Backend Shutting Down...")
+    await close_db()
 
 
 # Create FastAPI app
 app = FastAPI(
     title="FarmWise API",
-    description="Smart Farming Platform — ML-powered crop yield prediction, AI diagnostics, and marketplace.",
+    description="Smart Farming Platform — ML-powered crop yield prediction, AI diagnostics, and MongoDB marketplace.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -71,9 +72,10 @@ app.add_middleware(
 )
 
 # Register routers
-from backend.routers import auth, predict, crop_health, weather, market, marketplace
+from backend.routers import auth, farm, predict, crop_health, weather, market, marketplace
 
 app.include_router(auth.router)
+app.include_router(farm.router)
 app.include_router(predict.router)
 app.include_router(crop_health.router)
 app.include_router(weather.router)
@@ -86,13 +88,18 @@ async def root():
     return {
         "name": "FarmWise API",
         "version": "1.0.0",
+        "database": "MongoDB (FarmWise)",
         "status": "running",
         "model_status": predictor.model_info.get("status", "not_loaded"),
         "endpoints": {
             "docs": "/docs",
             "auth": "/api/auth",
+            "farmer_farm": "/api/farmer/farm",
+            "farmer_crops": "/api/farmer/crops",
             "predict": "/api/predict",
+            "predict_history": "/api/predict/history",
             "crop_health": "/api/crop-health",
+            "crop_health_history": "/api/crop-health/history",
             "weather": "/api/weather",
             "market_prices": "/api/market-prices",
             "marketplace": "/api/marketplace",
@@ -103,4 +110,4 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "model_loaded": predictor.is_loaded}
+    return {"status": "healthy", "database": "mongodb", "model_loaded": predictor.is_loaded}

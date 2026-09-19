@@ -1,34 +1,21 @@
 """
-Marketplace Router — Farmer crop listings, customer orders, and reviews.
+Marketplace Router — Farmer crop listings, customer orders, and reviews stored in MongoDB.
+Enforces multi-user data isolation and strict JWT authorization.
 """
 
 import logging
 import uuid
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 
-from backend.config import JWT_SECRET, JWT_ALGORITHM
-from backend.database import get_db
-from jose import jwt as jose_jwt
+from backend.database import get_db, to_object_id, format_doc
+from backend.routers.auth import get_current_user
 
 logger = logging.getLogger("farmwise.marketplace")
 router = APIRouter(prefix="/api", tags=["Marketplace"])
-
-
-# --- Helpers ---
-
-def _extract_user_id(authorization: str) -> Optional[int]:
-    """Extract user_id from Bearer token."""
-    if not authorization:
-        return None
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    try:
-        payload = jose_jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload.get("user_id")
-    except Exception:
-        return None
 
 
 # --- Pydantic Models ---
@@ -60,12 +47,12 @@ class UpdateListingRequest(BaseModel):
 
 
 class OrderItemInput(BaseModel):
-    listing_id: int
+    listing_id: str
     quantity_kg: float
 
 
 class CreateOrderRequest(BaseModel):
-    items: list[OrderItemInput]
+    items: List[OrderItemInput]
     delivery_name: str
     delivery_phone: str
     delivery_address: str
@@ -81,7 +68,7 @@ class UpdateOrderStatusRequest(BaseModel):
 
 
 class CreateReviewRequest(BaseModel):
-    order_id: int
+    order_id: str
     rating: int
     comment: str = ""
 
@@ -95,37 +82,37 @@ async def list_all_listings(
     limit: int = 50,
     db=Depends(get_db),
 ):
-    """Browse all active crop listings."""
-    query = """
-        SELECT cl.*, u.name as farmer_name, u.farm_name, u.location as farmer_location,
-               u.avatar as farmer_avatar, u.phone as farmer_phone, u.rating as farmer_rating,
-               u.reviews_count as farmer_reviews_count
-        FROM crop_listings cl
-        JOIN users u ON cl.farmer_id = u.id
-        WHERE cl.is_active = 1
-    """
-    params = []
+    """Browse all active crop listings in MongoDB."""
+    query = {"is_active": True}
 
-    if category:
-        query += " AND cl.category = ?"
-        params.append(category)
+    if category and category.lower() != "all":
+        query["category"] = category
 
     if search:
-        query += " AND cl.crop_name LIKE ?"
-        params.append(f"%{search}%")
+        query["crop_name"] = {"$regex": search, "$options": "i"}
 
-    query += " ORDER BY cl.created_at DESC LIMIT ?"
-    params.append(limit)
-
-    async with db.execute(query, params) as cursor:
-        rows = await cursor.fetchall()
+    cursor = db.crop_listings.find(query).sort("created_at", -1).limit(limit)
+    raw_listings = await cursor.to_list(length=limit)
 
     listings = []
-    for row in rows:
-        d = dict(row)
-        d["is_organic"] = bool(d.get("is_organic", 0))
-        d["is_active"] = bool(d.get("is_active", 1))
-        listings.append(d)
+    for item in raw_listings:
+        # Lookup farmer in users collection
+        farmer_id = item.get("farmer_id") or item.get("user_id")
+        farmer_user = None
+        if farmer_id:
+            farmer_user = await db.users.find_one({"_id": to_object_id(farmer_id)})
+
+        formatted = format_doc(item)
+        if farmer_user:
+            formatted["farmer_name"] = farmer_user.get("name", "Farmer")
+            formatted["farm_name"] = farmer_user.get("farm_name", "")
+            formatted["farmer_location"] = farmer_user.get("location", "")
+            formatted["farmer_avatar"] = farmer_user.get("avatar", "")
+            formatted["farmer_phone"] = farmer_user.get("phone", "")
+            formatted["farmer_rating"] = farmer_user.get("rating", 5.0)
+            formatted["farmer_reviews_count"] = farmer_user.get("reviews_count", 0)
+
+        listings.append(formatted)
 
     return {"listings": listings, "total": len(listings)}
 
@@ -136,111 +123,127 @@ async def create_listing(
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Farmer creates a new crop listing."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Authenticated farmer creates a new crop listing in MongoDB."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    await db.execute(
-        """INSERT INTO crop_listings
-           (farmer_id, crop_name, category, variety, description, price_per_kg,
-            unit, available_stock_kg, is_organic, harvest_date, image_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            user_id, req.crop_name, req.category, req.variety, req.description,
-            req.price_per_kg, req.unit, req.available_stock_kg,
-            1 if req.is_organic else 0, req.harvest_date, req.image_url,
-        ),
-    )
-    await db.commit()
+    if user.get("role") != "farmer":
+        raise HTTPException(status_code=403, detail="Only farmers can create listings")
 
-    # Return the created listing
-    async with db.execute(
-        "SELECT * FROM crop_listings WHERE farmer_id = ? ORDER BY id DESC LIMIT 1", (user_id,)
-    ) as cursor:
-        row = await cursor.fetchone()
+    user_id = user["_id"]
 
-    return {"status": "created", "listing": dict(row)}
+    doc = {
+        "user_id": user_id,  # ObjectId user_id
+        "farmer_id": user_id,
+        "crop_name": req.crop_name,
+        "category": req.category,
+        "variety": req.variety,
+        "description": req.description,
+        "price_per_kg": req.price_per_kg,
+        "unit": req.unit,
+        "available_stock_kg": req.available_stock_kg,
+        "is_organic": req.is_organic,
+        "harvest_date": req.harvest_date,
+        "image_url": req.image_url,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    res = await db.crop_listings.insert_one(doc)
+    doc["_id"] = res.inserted_id
+
+    formatted = format_doc(doc)
+    formatted["farmer_name"] = user.get("name", "")
+    formatted["farm_name"] = user.get("farm_name", "")
+
+    return {"status": "created", "listing": formatted}
 
 
 @router.get("/marketplace/listings/{listing_id}")
-async def get_listing(listing_id: int, db=Depends(get_db)):
-    """Get a single listing by ID."""
-    async with db.execute(
-        """SELECT cl.*, u.name as farmer_name, u.farm_name, u.location as farmer_location,
-                  u.avatar as farmer_avatar, u.phone as farmer_phone, u.rating as farmer_rating,
-                  u.reviews_count as farmer_reviews_count
-           FROM crop_listings cl JOIN users u ON cl.farmer_id = u.id WHERE cl.id = ?""",
-        (listing_id,),
-    ) as cursor:
-        row = await cursor.fetchone()
+async def get_listing(listing_id: str, db=Depends(get_db)):
+    """Get a single listing by MongoDB ObjectId."""
+    obj_id = to_object_id(listing_id)
+    if not obj_id:
+        raise HTTPException(status_code=400, detail="Invalid listing ID format")
 
-    if not row:
+    doc = await db.crop_listings.find_one({"_id": obj_id})
+    if not doc:
         raise HTTPException(status_code=404, detail="Listing not found")
 
-    d = dict(row)
-    d["is_organic"] = bool(d.get("is_organic", 0))
-    return d
+    farmer_id = doc.get("farmer_id") or doc.get("user_id")
+    farmer_user = None
+    if farmer_id:
+        farmer_user = await db.users.find_one({"_id": to_object_id(farmer_id)})
+
+    formatted = format_doc(doc)
+    if farmer_user:
+        formatted["farmer_name"] = farmer_user.get("name", "Farmer")
+        formatted["farm_name"] = farmer_user.get("farm_name", "")
+        formatted["farmer_location"] = farmer_user.get("location", "")
+        formatted["farmer_avatar"] = farmer_user.get("avatar", "")
+        formatted["farmer_phone"] = farmer_user.get("phone", "")
+        formatted["farmer_rating"] = farmer_user.get("rating", 5.0)
+        formatted["farmer_reviews_count"] = farmer_user.get("reviews_count", 0)
+
+    return formatted
 
 
 @router.put("/marketplace/listings/{listing_id}")
 async def update_listing(
-    listing_id: int,
+    listing_id: str,
     req: UpdateListingRequest,
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Update a listing (farmer only)."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Update a listing (owner farmer only)."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Verify ownership
-    async with db.execute(
-        "SELECT farmer_id FROM crop_listings WHERE id = ?", (listing_id,)
-    ) as cursor:
-        row = await cursor.fetchone()
-    if not row or dict(row)["farmer_id"] != user_id:
+    obj_id = to_object_id(listing_id)
+    if not obj_id:
+        raise HTTPException(status_code=400, detail="Invalid listing ID format")
+
+    doc = await db.crop_listings.find_one({"_id": obj_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    if str(doc.get("user_id")) != str(user["_id"]) and str(doc.get("farmer_id")) != str(user["_id"]):
         raise HTTPException(status_code=403, detail="Not authorized to update this listing")
 
-    updates = {}
-    for k, v in req.model_dump().items():
-        if v is not None:
-            if k == "is_organic":
-                updates[k] = 1 if v else 0
-            elif k == "is_active":
-                updates[k] = 1 if v else 0
-            else:
-                updates[k] = v
-
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if updates:
-        updates["updated_at"] = "CURRENT_TIMESTAMP"
-        set_clause = ", ".join(f"{k} = ?" for k in updates.keys() if k != "updated_at")
-        set_clause += ", updated_at = CURRENT_TIMESTAMP"
-        values = [v for k, v in updates.items() if k != "updated_at"]
-        values.append(listing_id)
-        await db.execute(f"UPDATE crop_listings SET {set_clause} WHERE id = ?", values)
-        await db.commit()
+        updates["updated_at"] = datetime.now(timezone.utc)
+        await db.crop_listings.update_one({"_id": obj_id}, {"$set": updates})
 
     return {"status": "updated"}
 
 
 @router.delete("/marketplace/listings/{listing_id}")
 async def delete_listing(
-    listing_id: int,
+    listing_id: str,
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Soft-delete a listing (set inactive)."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Soft-delete a listing (owner farmer only)."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    await db.execute(
-        "UPDATE crop_listings SET is_active = 0 WHERE id = ? AND farmer_id = ?",
-        (listing_id, user_id),
-    )
-    await db.commit()
+    obj_id = to_object_id(listing_id)
+    if not obj_id:
+        raise HTTPException(status_code=400, detail="Invalid listing ID format")
+
+    doc = await db.crop_listings.find_one({"_id": obj_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    if str(doc.get("user_id")) != str(user["_id"]) and str(doc.get("farmer_id")) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this listing")
+
+    await db.crop_listings.update_one({"_id": obj_id}, {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}})
     return {"status": "deleted"}
 
 
@@ -252,77 +255,76 @@ async def create_order(
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Customer places a new order."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Customer places a new order in MongoDB."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    customer_id = user["_id"]
     order_number = f"FW-{uuid.uuid4().hex[:8].upper()}"
 
-    # Calculate totals from listing items
     subtotal = 0.0
     order_items_data = []
     farmer_id = None
 
     for item in req.items:
-        async with db.execute(
-            "SELECT * FROM crop_listings WHERE id = ? AND is_active = 1", (item.listing_id,)
-        ) as cursor:
-            listing = await cursor.fetchone()
+        obj_lid = to_object_id(item.listing_id)
+        listing = None
+        if obj_lid:
+            listing = await db.crop_listings.find_one({"_id": obj_lid, "is_active": True})
 
         if not listing:
-            raise HTTPException(status_code=404, detail=f"Listing {item.listing_id} not found")
+            raise HTTPException(status_code=404, detail=f"Listing {item.listing_id} not found or inactive")
 
-        listing_dict = dict(listing)
-        item_total = listing_dict["price_per_kg"] * item.quantity_kg
+        item_total = float(listing["price_per_kg"]) * float(item.quantity_kg)
         subtotal += item_total
-        farmer_id = listing_dict["farmer_id"]
+        farmer_id = listing.get("farmer_id") or listing.get("user_id")
 
         order_items_data.append({
-            "listing_id": item.listing_id,
-            "crop_name": listing_dict["crop_name"],
+            "listing_id": listing["_id"],
+            "crop_name": listing["crop_name"],
             "quantity_kg": item.quantity_kg,
-            "price_per_kg": listing_dict["price_per_kg"],
+            "price_per_kg": listing["price_per_kg"],
             "total_price": item_total,
         })
 
-    delivery_fee = 50 if subtotal < 500 else 0
+    delivery_fee = 50.0 if subtotal < 500 else 0.0
     total = subtotal + delivery_fee
 
-    await db.execute(
-        """INSERT INTO orders
-           (order_number, customer_id, farmer_id, subtotal, delivery_fee, total,
-            payment_method, delivery_method, delivery_name, delivery_phone,
-            delivery_address, delivery_city, delivery_state, delivery_pincode)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            order_number, user_id, farmer_id, subtotal, delivery_fee, total,
-            req.payment_method, req.delivery_method, req.delivery_name, req.delivery_phone,
-            req.delivery_address, req.delivery_city, req.delivery_state, req.delivery_pincode,
-        ),
-    )
-    await db.commit()
+    order_doc = {
+        "order_number": order_number,
+        "user_id": customer_id,  # Customer user_id
+        "customer_id": customer_id,
+        "farmer_id": to_object_id(farmer_id),
+        "subtotal": subtotal,
+        "delivery_fee": delivery_fee,
+        "total": total,
+        "payment_method": req.payment_method,
+        "payment_status": "Pending",
+        "delivery_method": req.delivery_method,
+        "delivery_name": req.delivery_name,
+        "delivery_phone": req.delivery_phone,
+        "delivery_address": req.delivery_address,
+        "delivery_city": req.delivery_city,
+        "delivery_state": req.delivery_state,
+        "delivery_pincode": req.delivery_pincode,
+        "current_status_index": 0,
+        "created_at": datetime.now(timezone.utc),
+    }
 
-    # Get order ID
-    async with db.execute(
-        "SELECT id FROM orders WHERE order_number = ?", (order_number,)
-    ) as cursor:
-        order_row = await cursor.fetchone()
-    order_id = dict(order_row)["id"]
+    res = await db.orders.insert_one(order_doc)
+    order_id = res.inserted_id
 
-    # Insert order items
+    # Insert items into order_items collection
     for oi in order_items_data:
-        await db.execute(
-            """INSERT INTO order_items (order_id, listing_id, crop_name, quantity_kg, price_per_kg, total_price)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (order_id, oi["listing_id"], oi["crop_name"], oi["quantity_kg"], oi["price_per_kg"], oi["total_price"]),
-        )
-    await db.commit()
+        oi["order_id"] = order_id
+        oi["user_id"] = customer_id
+        await db.order_items.insert_one(oi)
 
     return {
         "status": "created",
         "order_number": order_number,
-        "order_id": order_id,
+        "order_id": str(order_id),
         "total": total,
     }
 
@@ -332,74 +334,101 @@ async def list_orders(
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Get all orders for the current user."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Get all orders for the authenticated user (customer or farmer)."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    async with db.execute(
-        """SELECT o.*, u.name as farmer_name, u.phone as farmer_phone
-           FROM orders o JOIN users u ON o.farmer_id = u.id
-           WHERE o.customer_id = ? OR o.farmer_id = ?
-           ORDER BY o.created_at DESC""",
-        (user_id, user_id),
-    ) as cursor:
-        rows = await cursor.fetchall()
+    user_id = user["_id"]
+
+    cursor = db.orders.find(
+        {"$or": [{"user_id": user_id}, {"customer_id": user_id}, {"farmer_id": user_id}]}
+    ).sort("created_at", -1)
+
+    raw_orders = await cursor.to_list(length=100)
 
     orders = []
-    for row in rows:
-        order = dict(row)
-        # Get order items
-        async with db.execute(
-            "SELECT * FROM order_items WHERE order_id = ?", (order["id"],)
-        ) as item_cursor:
-            items = [dict(ir) for ir in await item_cursor.fetchall()]
-        order["items"] = items
-        orders.append(order)
+    for order in raw_orders:
+        farmer_doc = await db.users.find_one({"_id": to_object_id(order.get("farmer_id"))})
+        items_cursor = db.order_items.find({"order_id": order["_id"]})
+        items_raw = await items_cursor.to_list(length=50)
+
+        formatted = format_doc(order)
+        formatted["farmer_name"] = farmer_doc.get("name", "Farmer") if farmer_doc else "Farmer"
+        formatted["farmer_phone"] = farmer_doc.get("phone", "") if farmer_doc else ""
+        formatted["items"] = [format_doc(item) for item in items_raw]
+        orders.append(formatted)
 
     return {"orders": orders}
 
 
 @router.get("/orders/{order_id}")
-async def get_order(order_id: int, authorization: str = Header(default=""), db=Depends(get_db)):
-    """Get order details."""
-    async with db.execute(
-        """SELECT o.*, u.name as farmer_name, u.phone as farmer_phone
-           FROM orders o JOIN users u ON o.farmer_id = u.id WHERE o.id = ?""",
-        (order_id,),
-    ) as cursor:
-        row = await cursor.fetchone()
+async def get_order(
+    order_id: str,
+    authorization: str = Header(default=""),
+    db=Depends(get_db),
+):
+    """Get specific order details (customer or farmer of order only)."""
+    user = await get_current_user(authorization, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if not row:
+    obj_id = to_object_id(order_id)
+    if not obj_id:
+        raise HTTPException(status_code=400, detail="Invalid order ID format")
+
+    order = await db.orders.find_one({"_id": obj_id})
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    order = dict(row)
-    async with db.execute(
-        "SELECT * FROM order_items WHERE order_id = ?", (order_id,)
-    ) as cursor:
-        items = [dict(ir) for ir in await cursor.fetchall()]
-    order["items"] = items
+    user_id_str = str(user["_id"])
+    if (
+        str(order.get("user_id")) != user_id_str
+        and str(order.get("customer_id")) != user_id_str
+        and str(order.get("farmer_id")) != user_id_str
+    ):
+        raise HTTPException(status_code=403, detail="Not authorized to view this order")
 
-    return order
+    farmer_doc = await db.users.find_one({"_id": to_object_id(order.get("farmer_id"))})
+    items_cursor = db.order_items.find({"order_id": order["_id"]})
+    items_raw = await items_cursor.to_list(length=50)
+
+    formatted = format_doc(order)
+    formatted["farmer_name"] = farmer_doc.get("name", "Farmer") if farmer_doc else "Farmer"
+    formatted["farmer_phone"] = farmer_doc.get("phone", "") if farmer_doc else ""
+    formatted["items"] = [format_doc(item) for item in items_raw]
+
+    return formatted
 
 
 @router.put("/orders/{order_id}/status")
 async def update_order_status(
-    order_id: int,
+    order_id: str,
     req: UpdateOrderStatusRequest,
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Farmer updates order status (0=Placed, 1=Paid, 2=Accepted, 3=Packed, 4=Out for delivery, 5=Delivered)."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Farmer updates order status in MongoDB."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    await db.execute(
-        "UPDATE orders SET current_status_index = ? WHERE id = ? AND farmer_id = ?",
-        (req.current_status_index, order_id, user_id),
+    obj_id = to_object_id(order_id)
+    if not obj_id:
+        raise HTTPException(status_code=400, detail="Invalid order ID format")
+
+    order = await db.orders.find_one({"_id": obj_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if str(order.get("farmer_id")) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Not authorized to update status for this order")
+
+    await db.orders.update_one(
+        {"_id": obj_id},
+        {"$set": {"current_status_index": req.current_status_index, "updated_at": datetime.now(timezone.utc)}}
     )
-    await db.commit()
+
     return {"status": "updated", "new_status_index": req.current_status_index}
 
 
@@ -411,35 +440,47 @@ async def create_review(
     authorization: str = Header(default=""),
     db=Depends(get_db),
 ):
-    """Customer submits a review for a completed order."""
-    user_id = _extract_user_id(authorization)
-    if not user_id:
+    """Customer submits a review for an order in MongoDB."""
+    user = await get_current_user(authorization, db)
+    if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Get farmer_id from order
-    async with db.execute("SELECT farmer_id FROM orders WHERE id = ?", (req.order_id,)) as cursor:
-        order_row = await cursor.fetchone()
-    if not order_row:
+    customer_id = user["_id"]
+    obj_oid = to_object_id(req.order_id)
+    order = await db.orders.find_one({"_id": obj_oid}) if obj_oid else None
+
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    farmer_id = dict(order_row)["farmer_id"]
+    if str(order.get("customer_id")) != str(customer_id) and str(order.get("user_id")) != str(customer_id):
+        raise HTTPException(status_code=403, detail="Only the ordering customer can leave a review")
 
-    await db.execute(
-        "INSERT INTO reviews (order_id, customer_id, farmer_id, rating, comment) VALUES (?, ?, ?, ?, ?)",
-        (req.order_id, user_id, farmer_id, req.rating, req.comment),
-    )
+    farmer_id = order.get("farmer_id")
 
-    # Update farmer rating
-    async with db.execute(
-        "SELECT AVG(rating) as avg_rating, COUNT(*) as cnt FROM reviews WHERE farmer_id = ?",
-        (farmer_id,),
-    ) as cursor:
-        stats = dict(await cursor.fetchone())
+    review_doc = {
+        "user_id": customer_id,  # Reviewer customer_id
+        "customer_id": customer_id,
+        "farmer_id": to_object_id(farmer_id),
+        "order_id": order["_id"],
+        "rating": req.rating,
+        "comment": req.comment,
+        "created_at": datetime.now(timezone.utc),
+    }
 
-    await db.execute(
-        "UPDATE users SET rating = ?, reviews_count = ? WHERE id = ?",
-        (round(stats["avg_rating"], 1), stats["cnt"], farmer_id),
-    )
-    await db.commit()
+    await db.reviews.insert_one(review_doc)
+
+    # Recalculate farmer rating in users collection
+    if farmer_id:
+        pipeline = [
+            {"$match": {"farmer_id": to_object_id(farmer_id)}},
+            {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}, "count": {"$sum": 1}}}
+        ]
+        stats_cursor = db.reviews.aggregate(pipeline)
+        stats = await stats_cursor.to_list(length=1)
+
+        if stats:
+            avg_r = round(stats[0]["avg_rating"], 1)
+            cnt = stats[0]["count"]
+            await db.users.update_one({"_id": to_object_id(farmer_id)}, {"$set": {"rating": avg_r, "reviews_count": cnt}})
 
     return {"status": "created", "rating": req.rating}

@@ -81,3 +81,7 @@ $RECYCLE.BIN/
 # Local Agent / AI Cache
 .agents/
 .gemini/
+
+# Python Cache
+__pycache__/
+*.pyc

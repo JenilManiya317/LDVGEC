@@ -33,20 +33,26 @@ export const FarmerRegisterPage: React.FC = () => {
 
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim()) {
-      setError('Please fill out all required fields.');
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+      setError('Please fill out all required fields including password.');
       return;
     }
-    register({
+    setError('');
+    const res = await register({
       name: formData.name,
       email: formData.email,
+      password: formData.password,
       phone: formData.phone,
       location: formData.location,
       role: 'farmer'
     });
-    navigate('/farmer/dashboard');
+    if (res.success) {
+      navigate('/farmer/dashboard');
+    } else {
+      setError(res.error || 'Registration failed. Please check your details.');
+    }
   };
 
   return (
