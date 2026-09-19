@@ -17,7 +17,29 @@ import { MOCK_CROP_HEALTH_ANALYSIS } from '../../lib/mock-data';
 
 export const CropHealthResultPage: React.FC = () => {
   const { navigate } = useRouter();
-  const analysis = MOCK_CROP_HEALTH_ANALYSIS;
+  
+  const analysis = React.useMemo(() => {
+    try {
+      const saved = localStorage.getItem('farmwise_last_crop_health');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...MOCK_CROP_HEALTH_ANALYSIS,
+          ...parsed,
+          diseaseDetected: parsed.diseaseDetected || parsed.disease_detected || parsed.disease || MOCK_CROP_HEALTH_ANALYSIS.diseaseDetected,
+          confidenceScore: parsed.confidenceScore || parsed.confidence_score || parsed.confidence || MOCK_CROP_HEALTH_ANALYSIS.confidenceScore,
+          severity: parsed.severity || MOCK_CROP_HEALTH_ANALYSIS.severity,
+          treatment: {
+            ...MOCK_CROP_HEALTH_ANALYSIS.treatment,
+            ...(parsed.treatment || {})
+          }
+        };
+      }
+    } catch {
+      // fallback
+    }
+    return MOCK_CROP_HEALTH_ANALYSIS;
+  }, []);
 
   return (
     <div className="flex min-h-screen text-white">
@@ -123,7 +145,7 @@ export const CropHealthResultPage: React.FC = () => {
                 Preventative Measures
               </span>
               <ul className="space-y-2 text-xs font-medium text-white/90">
-                {analysis.preventativeMeasures.map((measure, idx) => (
+                {(analysis.preventativeMeasures || []).map((measure: string, idx: number) => (
                   <li key={idx} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5" />
                     <span>{measure}</span>

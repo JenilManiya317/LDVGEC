@@ -158,6 +158,7 @@ export const api = {
       role: 'farmer' | 'customer';
       phone?: string;
       location?: string;
+      avatar?: string;
       farm_name?: string;
       total_area?: string;
     }) => request('POST', '/api/auth/register', data),

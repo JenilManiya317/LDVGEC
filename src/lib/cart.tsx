@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ProductItem, CartItem, OrderItem } from './types';
 import { INITIAL_CART_ITEMS, MOCK_ACTIVE_ORDER } from './mock-data';
+import { api } from './api';
 
 interface CartContextType {
   items: CartItem[];
@@ -133,9 +134,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     deliveryMethod: 'Standard Delivery' | 'Farmer Pickup';
     paymentMethod: 'UPI' | 'Card' | 'Cash on Delivery';
   }): OrderItem => {
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const orderNumber = `FW-2026-${randomSuffix}`;
+
     const newOrder: OrderItem = {
-      id: `ord_fw_${Math.floor(1000 + Math.random() * 9000)}`,
-      orderNumber: `FW-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: `ord_fw_${randomSuffix}`,
+      orderNumber,
       date: new Date().toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
@@ -153,6 +157,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       farmerName: items[0]?.product.farmerName || 'Rudra Patel',
       farmerPhone: '+91 98251 44321'
     };
+
+    // Asynchronously sync to backend database
+    api.orders.create({
+      items: items.map(it => ({
+        listing_id: parseInt(it.product.id, 10) || 1,
+        quantity_kg: it.quantityKg,
+      })),
+      delivery_name: details.address.name,
+      delivery_phone: details.address.phone,
+      delivery_address: details.address.address,
+      delivery_city: details.address.city,
+      delivery_state: details.address.state,
+      delivery_pincode: details.address.pincode,
+      payment_method: details.paymentMethod,
+      delivery_method: details.deliveryMethod,
+    }).then(res => {
+      if (res.data?.order_id) {
+        newOrder.id = String(res.data.order_id);
+        if (res.data.order_number) {
+          newOrder.orderNumber = res.data.order_number;
+        }
+        setActiveOrder({ ...newOrder });
+      }
+    }).catch(err => {
+      console.warn('Backend order sync fallback:', err);
+    });
 
     setActiveOrder(newOrder);
     clearCart();

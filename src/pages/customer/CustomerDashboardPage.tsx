@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { useAuth } from '../../lib/auth';
 import { useCart } from '../../lib/cart';
@@ -14,24 +14,74 @@ import {
   Check
 } from 'lucide-react';
 import { MOCK_PRODUCTS } from '../../lib/mock-data';
+import { ProductItem } from '../../lib/types';
+import { api } from '../../lib/api';
 
 export const CustomerDashboardPage: React.FC = () => {
   const { navigate } = useRouter();
   const { user } = useAuth();
   const { addItem } = useCart();
+  const [productsList, setProductsList] = useState<ProductItem[]>(MOCK_PRODUCTS);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [addedNotice, setAddedNotice] = useState<string | null>(null);
 
   const categories = ['All', 'Vegetables', 'Fruits', 'Grains', 'Pulses', 'Organic'];
 
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchListings = async () => {
+      try {
+        const catParam = activeCategory === 'All' || activeCategory === 'Organic' ? '' : activeCategory;
+        const res = await api.marketplace.listings(catParam);
+        if (!isCancelled && res.data?.listings && res.data.listings.length > 0) {
+          const backendProducts: ProductItem[] = res.data.listings.map((row: any) => ({
+            id: String(row.id),
+            name: row.crop_name || row.name || 'Produce',
+            category: row.category || 'Vegetables',
+            pricePerKg: row.price_per_kg ?? 30,
+            unit: row.unit || 'kg',
+            imageUrl: row.image_url || 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=85',
+            farmerId: String(row.farmer_id || '1'),
+            farmerName: row.farmer_name || 'Rudra Patel',
+            farmName: row.farm_name || 'Patel Organic Farms',
+            location: row.farmer_location || 'Surat, Gujarat',
+            farmerAvatar: row.farmer_avatar || '/images/farmer-portrait.jpg',
+            rating: row.farmer_rating || 4.9,
+            reviewsCount: row.farmer_reviews_count || 12,
+            availableStockKg: row.available_stock_kg ?? 200,
+            quantityAvailableKg: row.available_stock_kg ?? 200,
+            description: row.description || '',
+            variety: row.variety || 'Hybrid Fresh Pick',
+            isOrganic: Boolean(row.is_organic),
+            harvestDate: row.harvest_date || 'Today',
+          }));
+          const combined = [...backendProducts];
+          for (const mp of MOCK_PRODUCTS) {
+            if (!combined.some(p => p.name.toLowerCase() === mp.name.toLowerCase())) {
+              combined.push(mp);
+            }
+          }
+          setProductsList(combined);
+        }
+      } catch (err) {
+        console.warn('Dashboard listings fallback:', err);
+      }
+    };
+
+    fetchListings();
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeCategory]);
+
   const filteredProducts =
     activeCategory === 'All'
-      ? MOCK_PRODUCTS
+      ? productsList
       : activeCategory === 'Organic'
-        ? MOCK_PRODUCTS.filter((p) => p.isOrganic)
-        : MOCK_PRODUCTS.filter((p) => p.category === activeCategory);
+        ? productsList.filter((p) => p.isOrganic)
+        : productsList.filter((p) => p.category === activeCategory);
 
-  const handleQuickAdd = (product: typeof MOCK_PRODUCTS[0], e: React.MouseEvent) => {
+  const handleQuickAdd = (product: ProductItem, e: React.MouseEvent) => {
     e.stopPropagation();
     addItem(product, 1);
     setAddedNotice(product.name);

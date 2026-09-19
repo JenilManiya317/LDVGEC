@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../lib/router';
 import { CustomerNavbar } from '../../components/layout/CustomerNavbar';
 import { GlassCard } from '../../components/common/GlassCard';
@@ -19,6 +19,8 @@ import {
   Leaf
 } from 'lucide-react';
 import { MOCK_PRODUCTS } from '../../lib/mock-data';
+import { ProductItem } from '../../lib/types';
+import { api } from '../../lib/api';
 
 export const ProductDetailPage: React.FC = () => {
   const { path, params, navigate } = useRouter();
@@ -26,7 +28,51 @@ export const ProductDetailPage: React.FC = () => {
 
   const pathParts = path.split('/');
   const rawId = params.productId || pathParts[pathParts.length - 1];
-  const product = MOCK_PRODUCTS.find((p) => p.id === rawId) || MOCK_PRODUCTS[0];
+  const initialProduct = MOCK_PRODUCTS.find((p) => p.id === rawId) || MOCK_PRODUCTS[0];
+  const [product, setProduct] = useState<ProductItem>(initialProduct);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchSingleListing = async () => {
+      const numId = parseInt(rawId, 10);
+      if (!isNaN(numId)) {
+        try {
+          const res = await api.marketplace.getListing(numId);
+          if (!isCancelled && res.data) {
+            const d = res.data;
+            setProduct({
+              id: String(d.id),
+              name: d.crop_name || d.name,
+              category: d.category || 'Vegetables',
+              pricePerKg: d.price_per_kg ?? 30,
+              unit: d.unit || 'kg',
+              imageUrl: d.image_url || initialProduct.imageUrl,
+              farmerId: String(d.farmer_id || '1'),
+              farmerName: d.farmer_name || 'Rudra Patel',
+              farmName: d.farm_name || 'Patel Organic Farms',
+              location: d.farmer_location || 'Surat, Gujarat',
+              farmerAvatar: d.farmer_avatar || '/images/farmer-portrait.jpg',
+              rating: d.farmer_rating || 4.9,
+              reviewsCount: d.farmer_reviews_count || 12,
+              availableStockKg: d.available_stock_kg ?? 200,
+              quantityAvailableKg: d.available_stock_kg ?? 200,
+              description: d.description || '',
+              variety: d.variety || 'Hybrid Fresh Pick',
+              isOrganic: Boolean(d.is_organic),
+              harvestDate: d.harvest_date || 'Today',
+            });
+          }
+        } catch (err) {
+          console.warn('Single listing fetch fallback:', err);
+        }
+      }
+    };
+
+    fetchSingleListing();
+    return () => {
+      isCancelled = true;
+    };
+  }, [rawId]);
 
   const [quantity, setQuantity] = useState(5);
   const [addedNotice, setAddedNotice] = useState(false);

@@ -44,6 +44,7 @@ class RegisterRequest(BaseModel):
     role: str  # 'farmer' or 'customer'
     phone: Optional[str] = ""
     location: Optional[str] = ""
+    avatar: Optional[str] = ""
     farm_name: Optional[str] = ""
     total_area: Optional[str] = ""
 

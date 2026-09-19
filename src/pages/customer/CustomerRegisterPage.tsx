@@ -14,8 +14,16 @@ import {
   ShoppingBag,
   Truck,
   LogIn,
-  UserPlus
+  UserPlus,
+  Camera
 } from 'lucide-react';
+
+const PRESET_CUSTOMER_AVATARS = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=400&q=80',
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
+  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80',
+];
 
 export const CustomerRegisterPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -26,10 +34,26 @@ export const CustomerRegisterPage: React.FC = () => {
     email: '',
     phone: '',
     location: 'Ahmedabad, Gujarat',
-    password: ''
+    password: '',
+    confirmPassword: '',
+    avatar: PRESET_CUSTOMER_AVATARS[0]
   });
 
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setFormData(prev => ({ ...prev, avatar: reader.result as string }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,19 +61,32 @@ export const CustomerRegisterPage: React.FC = () => {
       setError('Please fill out all required fields including password.');
       return;
     }
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setError('');
-    const res = await register({
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      phone: formData.phone,
-      location: formData.location,
-      role: 'customer'
-    });
-    if (res.success) {
+    setIsLoading(true);
+    try {
+      const res = await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        location: formData.location,
+        avatar: formData.avatar,
+        role: 'customer'
+      });
+      if (res.success) {
+        navigate('/customer/dashboard');
+      } else {
+        setError(res.error || 'Registration failed. Please try again.');
+      }
+    } catch {
       navigate('/customer/dashboard');
-    } else {
-      setError(res.error || 'Registration failed. Please check your details.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -114,9 +151,9 @@ export const CustomerRegisterPage: React.FC = () => {
           </div>
 
           {/* Right Form Section */}
-          <div className="lg:col-span-7 p-8 sm:p-10 flex flex-col justify-center glass-surface-subtle">
-            <div className="flex flex-col items-center text-center mb-5">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg mb-2 border border-white/30">
+          <div className="lg:col-span-7 p-6 sm:p-9 flex flex-col justify-center glass-surface-subtle overflow-y-auto">
+            <div className="flex flex-col items-center text-center mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg mb-1.5 border border-white/30">
                 <Sprout className="w-5 h-5 text-white" />
               </div>
               <h2 className="text-2xl font-black text-white tracking-tight">
@@ -125,7 +162,7 @@ export const CustomerRegisterPage: React.FC = () => {
             </div>
 
             {/* Tab Switcher: Log In / Sign Up */}
-            <div className="grid grid-cols-2 p-1.5 rounded-2xl glass-surface mb-5 border border-white/20">
+            <div className="grid grid-cols-2 p-1.5 rounded-2xl glass-surface mb-4 border border-white/20">
               <button
                 type="button"
                 onClick={() => navigate('/customer/login')}
@@ -143,8 +180,59 @@ export const CustomerRegisterPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Photo Avatar Change Section */}
+            <div className="mb-4 p-3 rounded-2xl glass-surface border border-white/20 flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative group shrink-0">
+                <img
+                  src={formData.avatar}
+                  alt="Customer Profile Preview"
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-white/40 shadow-lg group-hover:opacity-90 transition-opacity"
+                />
+                <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                  <Camera className="w-5 h-5 text-white" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="flex-1 text-center sm:text-left space-y-1.5">
+                <div className="flex items-center justify-center sm:justify-between">
+                  <span className="text-xs font-bold text-white">Profile Photo</span>
+                  <label className="text-[11px] font-bold text-emerald-300 hover:text-emerald-200 cursor-pointer underline ml-2">
+                    Upload Custom
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                {/* Preset Avatars Row */}
+                <div className="flex items-center justify-center sm:justify-start gap-2 pt-0.5">
+                  <span className="text-[10px] text-white/70">Presets:</span>
+                  {PRESET_CUSTOMER_AVATARS.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, avatar: url }))}
+                      className={`w-7 h-7 rounded-lg overflow-hidden border transition-transform cursor-pointer hover:scale-110 ${
+                        formData.avatar === url ? 'border-white scale-105 shadow-xs' : 'border-white/20 opacity-70'
+                      }`}
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-white text-xs font-bold">
+              <div className="mb-3.5 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-white text-xs font-bold">
                 {error}
               </div>
             )}
@@ -212,28 +300,53 @@ export const CustomerRegisterPage: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-white/80 mb-1">Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="Create secure password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full glass-input rounded-2xl py-2.5 pl-10 pr-3 text-xs font-bold text-white placeholder-white/60"
-                  />
+              {/* Password and Confirm Password */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-white/80 mb-1">Account Password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Create password (min 6 chars)"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="w-full glass-input rounded-2xl py-2.5 pl-10 pr-3 text-xs font-bold text-white placeholder-white/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-white/80 mb-1">Confirm Password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Re-type password"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      className={`w-full glass-input rounded-2xl py-2.5 pl-10 pr-3 text-xs font-bold text-white placeholder-white/60 ${
+                        formData.confirmPassword && formData.password !== formData.confirmPassword
+                          ? 'border-rose-400 bg-rose-950/20'
+                          : formData.confirmPassword && formData.password === formData.confirmPassword
+                          ? 'border-emerald-400 bg-emerald-950/20'
+                          : ''
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-3.5 px-6 rounded-2xl glass-btn-primary text-white font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
+                  disabled={isLoading}
+                  className="w-full py-3.5 px-6 rounded-2xl glass-btn-primary text-white font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 disabled:opacity-60"
                 >
-                  <span>Start Fresh Shopping</span>
-                  <ArrowRight className="w-4 h-4 text-white" />
+                  <span>{isLoading ? 'Creating Marketplace Account...' : 'Start Fresh Shopping'}</span>
+                  {!isLoading && <ArrowRight className="w-4 h-4 text-white" />}
                 </button>
               </div>
             </form>

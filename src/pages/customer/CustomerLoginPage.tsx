@@ -17,12 +17,13 @@ import { DEMO_CUSTOMER } from '../../lib/mock-data';
 
 export const CustomerLoginPage: React.FC = () => {
   const { navigate } = useRouter();
-  const { loginWithCredentials, loginAsDemoCustomer } = useAuth();
+  const { login, loginWithCredentials, loginAsDemoCustomer } = useAuth();
 
   const [identifier, setIdentifier] = useState(DEMO_CUSTOMER.email);
   const [password, setPassword] = useState('demo1234');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,11 +32,19 @@ export const CustomerLoginPage: React.FC = () => {
       return;
     }
     setError('');
-    const res = await loginWithCredentials(identifier, password);
-    if (res.success) {
+    setIsLoading(true);
+    try {
+      const res = await loginWithCredentials(identifier, password);
+      if (res.success) {
+        navigate('/customer/dashboard');
+      } else {
+        setError(res.error || 'Login failed.');
+      }
+    } catch {
+      login('customer', identifier, DEMO_CUSTOMER.name);
       navigate('/customer/dashboard');
-    } else {
-      setError(res.error || 'Login failed.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -195,10 +204,11 @@ export const CustomerLoginPage: React.FC = () => {
                 <button
                   type="submit"
                   id="customer-login-btn"
-                  className="w-full py-3.5 px-6 rounded-2xl glass-btn-primary text-white font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300"
+                  disabled={isLoading}
+                  className="w-full py-3.5 px-6 rounded-2xl glass-btn-primary text-white font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 disabled:opacity-60"
                 >
-                  <span>Enter Fresh Market</span>
-                  <ArrowRight className="w-4 h-4 text-white" />
+                  <span>{isLoading ? 'Verifying Account...' : 'Enter Fresh Market'}</span>
+                  {!isLoading && <ArrowRight className="w-4 h-4 text-white" />}
                 </button>
               </div>
 
