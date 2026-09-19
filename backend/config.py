@@ -28,30 +28,36 @@ try:
 except (OSError, PermissionError):
     pass
 
-# --- Database (MongoDB) ---
+# --- Database (MongoDB Atlas) ---
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "FarmWise")
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", os.getenv("MONGODB_DB_NAME", "FarmWise"))
 
 # --- Security ---
-JWT_SECRET = os.getenv("JWT_SECRET", "farmwise-dev-secret-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "farmwise-dev-secret-change-in-production"))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
-# --- API Keys ---
+# --- Frontend & CORS ---
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+_env_cors = os.getenv("CORS_ORIGINS", "")
+CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+if FRONTEND_URL and FRONTEND_URL not in CORS_ORIGINS:
+    CORS_ORIGINS.append(FRONTEND_URL.rstrip("/"))
+if _env_cors:
+    for o in _env_cors.split(","):
+        cleaned = o.strip().rstrip("/")
+        if cleaned and cleaned not in CORS_ORIGINS:
+            CORS_ORIGINS.append(cleaned)
+
+
+# --- External API Keys ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
-
-# --- Server ---
-_env_cors = os.getenv("CORS_ORIGINS", "")
-if _env_cors:
-    CORS_ORIGINS = [origin.strip() for origin in _env_cors.split(",") if origin.strip()]
-else:
-    CORS_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]
 
 # --- Email / SMTP ---
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import CORS_ORIGINS
-from backend.database import init_db, close_db
+from backend.database import init_db, close_db, get_db
 from backend.ml.predictor import predictor
 
 # Configure logging
@@ -117,4 +117,20 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "database": "mongodb", "model_loaded": predictor.is_loaded}
+    db_status = "connected"
+    try:
+        database = await get_db()
+        if database is not None:
+            await database.command("ping")
+        else:
+            db_status = "uninitialized"
+    except Exception as e:
+        db_status = f"unavailable: {str(e)[:50]}"
+
+    return {
+        "status": "ok",
+        "database": db_status,
+        "database_engine": "MongoDB Atlas",
+        "model_loaded": predictor.is_loaded,
+    }
+
