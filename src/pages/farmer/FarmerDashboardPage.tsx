@@ -22,7 +22,13 @@ import {
   RefreshCw,
   Cpu,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Store,
+  PlusCircle,
+  Package,
+  ArrowRight,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 import {
   MOCK_WEATHER,
@@ -33,6 +39,8 @@ import {
 import { UserProfileModal } from '../../components/common/UserProfileModal';
 import { api } from '../../lib/api';
 import { predictYieldLocally, formatBackendYieldPrediction, YieldPredictionOutput } from '../../lib/ml';
+import { getFarmerTasks, toggleFarmerTask } from '../../lib/tasks';
+import { TaskInstruction } from '../../lib/types';
 
 export const FarmerDashboardPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -64,8 +72,8 @@ export const FarmerDashboardPage: React.FC = () => {
     })
   );
 
-  // Interactive task completion state
-  const [tasks, setTasks] = useState(MOCK_TODAYS_TASKS);
+  // Interactive task completion state (persisted across sessions & AI diagnostics)
+  const [tasks, setTasks] = useState<TaskInstruction[]>(() => getFarmerTasks());
   const [activeCropIndex, setActiveCropIndex] = useState(0);
 
 
@@ -218,9 +226,8 @@ export const FarmerDashboardPage: React.FC = () => {
   const pendingCount = tasks.length - completedCount;
 
   const toggleTask = (id: string) => {
-    setTasks(prev =>
-      prev.map(t => (t.id === id ? { ...t, completed: !t.completed } : t))
-    );
+    const updated = toggleFarmerTask(id);
+    setTasks(updated);
   };
 
   const selectedCropPrice = marketPrices[activeCropIndex % marketPrices.length] || MOCK_MARKET_PRICES[0];
@@ -278,22 +285,41 @@ export const FarmerDashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 self-stretch md:self-auto justify-end">
+          <div className="flex items-center gap-2 flex-wrap self-stretch md:self-auto justify-end">
             <GlassButton
+              id="dashboard-marketplace-btn"
               variant="primary"
+              size="sm"
+              onClick={() => navigate('/customer/browse-crops')}
+              icon={<Store className="w-4 h-4 text-white" />}
+            >
+              Marketplace
+            </GlassButton>
+            <GlassButton
+              id="dashboard-seller-hub-btn"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/farmer/seller-hub')}
+              icon={<ShoppingBag className="w-4 h-4 text-white" />}
+            >
+              Seller Hub
+            </GlassButton>
+            <GlassButton
+              id="dashboard-sell-crop-btn"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/farmer/list-crop')}
+              icon={<PlusCircle className="w-4 h-4 text-white" />}
+            >
+              Sell Crop
+            </GlassButton>
+            <GlassButton
+              variant="ghost"
               size="sm"
               onClick={() => navigate('/farmer/crop-health')}
               icon={<ScanEye className="w-4 h-4 text-white" />}
             >
               Scan Crop
-            </GlassButton>
-            <GlassButton
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate('/farmer/list-crop')}
-              icon={<ShoppingBag className="w-4 h-4 text-white" />}
-            >
-              Sell Crop
             </GlassButton>
           </div>
         </GlassCard>
@@ -365,7 +391,7 @@ export const FarmerDashboardPage: React.FC = () => {
 
           <GlassCard
             variant="interactive"
-            onClick={() => navigate('/farmer/list-crop')}
+            onClick={() => navigate('/farmer/seller-hub')}
             className="p-5"
           >
             <div className="flex items-center justify-between mb-2">
@@ -379,11 +405,99 @@ export const FarmerDashboardPage: React.FC = () => {
             <div className="text-3xl font-black text-white tracking-tight">
               <AnimatedCounter value={3} duration={600} />
             </div>
-            <div className="text-[11px] text-white/90 font-bold mt-1">
-              Ready for dispatch
+            <div className="text-[11px] text-emerald-300 font-bold mt-1 flex items-center gap-1">
+              <span>View in Seller Hub</span>
+              <ArrowRight className="w-3 h-3" />
             </div>
           </GlassCard>
         </div>
+
+        {/* DIRECT MARKETPLACE & SELLER ORDERS ACCESS BANNER */}
+        <GlassCard variant="elevated" className="p-6 border border-white/20 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/15">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-white/15 text-white text-[11px] font-extrabold mb-1.5 border border-white/20">
+                <Store className="w-3.5 h-3.5 text-white" />
+                <span>Direct Farmer-to-Consumer Channel</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                Marketplace & Seller Management Hub
+              </h2>
+              <p className="text-xs text-white/80 font-medium">
+                Access consumer marketplace directly, track fulfillment of incoming customer orders, and publish new harvests with zero middleman deduction.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={() => navigate('/farmer/seller-hub')}
+                icon={<ShoppingBag className="w-4 h-4 text-white" />}
+              >
+                Open Seller Interface
+              </GlassButton>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate('/customer/browse-crops')}
+                icon={<ExternalLink className="w-4 h-4 text-white" />}
+              >
+                View Marketplace
+              </GlassButton>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div
+              onClick={() => navigate('/farmer/seller-hub')}
+              className="p-4 rounded-2xl glass-surface-subtle hover:bg-white/15 border border-white/15 cursor-pointer transition-all group space-y-1"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-white group-hover:underline flex items-center gap-1.5">
+                  <ShoppingBag className="w-4 h-4 text-white" />
+                  Customer Orders
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 text-white/60 group-hover:translate-x-1 transition-transform" />
+              </div>
+              <p className="text-[11px] text-white/70 font-medium">
+                Track delivery stages: Placed → Packed → Out for Delivery → Delivered.
+              </p>
+            </div>
+
+            <div
+              onClick={() => navigate('/farmer/seller-hub')}
+              className="p-4 rounded-2xl glass-surface-subtle hover:bg-white/15 border border-white/15 cursor-pointer transition-all group space-y-1"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-white group-hover:underline flex items-center gap-1.5">
+                  <Package className="w-4 h-4 text-white" />
+                  Listed Crops
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 text-white/60 group-hover:translate-x-1 transition-transform" />
+              </div>
+              <p className="text-[11px] text-white/70 font-medium">
+                Manage live crops, edit pricing per kg, and view inventory levels.
+              </p>
+            </div>
+
+            <div
+              onClick={() => navigate('/farmer/list-crop')}
+              className="p-4 rounded-2xl glass-surface-subtle hover:bg-white/15 border border-white/15 cursor-pointer transition-all group space-y-1"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-white group-hover:underline flex items-center gap-1.5">
+                  <PlusCircle className="w-4 h-4 text-white" />
+                  List Harvest
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 text-white/60 group-hover:translate-x-1 transition-transform" />
+              </div>
+              <p className="text-[11px] text-white/70 font-medium">
+                Upload crop photo, set custom prices, and publish directly to marketplace.
+              </p>
+            </div>
+          </div>
+        </GlassCard>
 
         {/* INTERACTIVE AI CROP YIELD & MARKET SIMULATOR */}
         <GlassCard variant="elevated" className="p-6 border border-white/20 space-y-4">
