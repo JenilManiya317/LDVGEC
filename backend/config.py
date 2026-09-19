@@ -25,6 +25,10 @@ FEATURES_JSON_PATH = MODELS_DIR / "features.json"
 # Ensure directories exist
 MODELS_DIR.mkdir(exist_ok=True)
 
+# --- Database (MongoDB) ---
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "FarmWise")
+
 # --- Security ---
 JWT_SECRET = os.getenv("JWT_SECRET", "farmwise-dev-secret-change-in-production")
 JWT_ALGORITHM = "HS256"

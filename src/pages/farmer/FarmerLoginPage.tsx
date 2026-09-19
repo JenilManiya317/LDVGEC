@@ -28,21 +28,20 @@ export const FarmerLoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
-      setError('Please enter your email or mobile number.');
+    if (!identifier.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
       return;
     }
     setError('');
     setIsLoading(true);
     try {
-      const res = await loginWithCredentials(identifier, password, 'farmer');
+      const res = await loginWithCredentials(identifier, password);
       if (res.success) {
         navigate('/farmer/dashboard');
       } else {
-        setError(res.error || 'Invalid credentials. Please try again.');
+        setError(res.error || 'Login failed.');
       }
     } catch {
-      // Fallback
       login('farmer', identifier, DEMO_FARMER.name);
       navigate('/farmer/dashboard');
     } finally {

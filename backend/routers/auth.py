@@ -1,23 +1,38 @@
 """
-Authentication Router — JWT-based registration and login for farmers and customers.
+Authentication Router — JWT-based registration and login backed by MongoDB.
+Enforces multi-user security with user_id extraction from JWT.
 """
 
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
+from fastapi import APIRouter, Depends, HTTPException, Header, status
+from pydantic import BaseModel
+import bcrypt
 from jose import JWTError, jwt
 
 from backend.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
-from backend.database import get_db
+from backend.database import get_db, to_object_id, format_doc
 
 logger = logging.getLogger("farmwise.auth")
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt directly."""
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify password against bcrypt hash."""
+    try:
+        pwd_bytes = password.encode('utf-8')[:72]
+        return bcrypt.checkpw(pwd_bytes, hashed.encode('utf-8'))
+    except Exception:
+        return False
 
 
 # --- Pydantic Models ---
@@ -65,127 +80,152 @@ def create_access_token(data: dict) -> str:
 
 def verify_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        clean_token = token.replace("Bearer ", "") if token.startswith("Bearer ") else token
+        payload = jwt.decode(clean_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
     except JWTError:
         return None
 
 
-async def get_current_user(token: str = "", db=None):
-    """Extract the current user from JWT token."""
-    if not token:
+async def get_current_user(authorization: str = Header(default=""), db=Depends(get_db)) -> Optional[dict]:
+    """Extract authenticated user document from JWT in Authorization header."""
+    if not authorization:
         return None
-    payload = verify_token(token)
+    payload = verify_token(authorization)
     if not payload:
         return None
-    user_id = payload.get("user_id")
-    if not user_id:
+    user_id_str = payload.get("user_id")
+    if not user_id_str:
         return None
-    async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
-        row = await cursor.fetchone()
-        if row:
-            return dict(row)
-    return None
 
+    obj_id = to_object_id(user_id_str)
+    if not obj_id:
+        return None
 
-def user_row_to_dict(row) -> dict:
-    """Convert a database row to a user profile dictionary."""
-    d = dict(row)
-    d.pop("password_hash", None)
-    return d
+    user_doc = await db.users.find_one({"_id": obj_id})
+    return user_doc
 
 
 # --- Routes ---
 
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, db=Depends(get_db)):
-    """Register a new farmer or customer."""
+    """Register a new farmer or customer in MongoDB."""
     if req.role not in ("farmer", "customer"):
         raise HTTPException(status_code=400, detail="Role must be 'farmer' or 'customer'")
 
-    # Check if email already exists
-    async with db.execute("SELECT id FROM users WHERE email = ?", (req.email,)) as cursor:
-        existing = await cursor.fetchone()
-        if existing:
-            raise HTTPException(status_code=409, detail="Email already registered")
+    email_lower = req.email.strip().lower()
 
-    password_hash = pwd_context.hash(req.password)
+    # Check if email already exists in MongoDB
+    existing = await db.users.find_one({"email": email_lower})
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
 
-    await db.execute(
-        """INSERT INTO users (name, email, password_hash, role, phone, location, avatar, farm_name, total_area)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (req.name, req.email, password_hash, req.role, req.phone, req.location, req.avatar, req.farm_name, req.total_area),
-    )
-    await db.commit()
+    password_hash = hash_password(req.password)
 
-    # Get the created user
-    async with db.execute("SELECT * FROM users WHERE email = ?", (req.email,)) as cursor:
-        user_row = await cursor.fetchone()
+    user_doc = {
+        "name": req.name,
+        "email": email_lower,
+        "password_hash": password_hash,
+        "role": req.role,
+        "phone": req.phone or "",
+        "location": req.location or "",
+        "farm_name": req.farm_name or "",
+        "total_area": req.total_area or "",
+        "avatar": "",
+        "rating": 0.0,
+        "reviews_count": 0,
+        "created_at": datetime.now(timezone.utc),
+    }
 
-    user = user_row_to_dict(user_row)
-    token = create_access_token({"user_id": user["id"], "role": user["role"], "email": user["email"]})
+    result = await db.users.insert_one(user_doc)
+    user_id = result.inserted_id
+    user_doc["_id"] = user_id
 
-    return TokenResponse(access_token=token, user=user)
+    # If farmer, initialize farm profile in farm_profiles collection
+    if req.role == "farmer":
+        await db.farm_profiles.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "name": req.farm_name or f"{req.name}'s Farm",
+                    "total_area": float(req.total_area) if req.total_area and req.total_area.replace('.', '', 1).isdigit() else 10.0,
+                    "location": req.location or "",
+                    "state": req.location.split(",")[-1].strip() if "," in (req.location or "") else "Gujarat",
+                    "created_at": datetime.now(timezone.utc),
+                }
+            },
+            upsert=True,
+        )
+
+    formatted_user = format_doc(user_doc)
+    token = create_access_token({"user_id": formatted_user["id"], "role": formatted_user["role"], "email": formatted_user["email"]})
+
+    return TokenResponse(access_token=token, user=formatted_user)
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest, db=Depends(get_db)):
-    """Login with email and password."""
-    async with db.execute("SELECT * FROM users WHERE email = ?", (req.email,)) as cursor:
-        user_row = await cursor.fetchone()
+    """Login with email and password using MongoDB users collection."""
+    email_lower = req.email.strip().lower()
+    user_doc = await db.users.find_one({"email": email_lower})
 
-    if not user_row:
+    if not user_doc:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    user_data = dict(user_row)
-    if not pwd_context.verify(req.password, user_data["password_hash"]):
+    if not verify_password(req.password, user_doc.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    user = user_row_to_dict(user_row)
-    token = create_access_token({"user_id": user["id"], "role": user["role"], "email": user["email"]})
+    formatted_user = format_doc(user_doc)
+    token = create_access_token({"user_id": formatted_user["id"], "role": formatted_user["role"], "email": formatted_user["email"]})
 
-    return TokenResponse(access_token=token, user=user)
+    return TokenResponse(access_token=token, user=formatted_user)
 
 
 @router.get("/profile")
-async def get_profile(authorization: str = "", db=Depends(get_db)):
-    """Get current user's profile."""
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+async def get_profile(authorization: str = Header(default=""), db=Depends(get_db)):
+    """Get current user's profile from MongoDB."""
+    user_doc = await get_current_user(authorization, db)
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Not authenticated or invalid token")
 
-    payload = verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_id = payload.get("user_id")
-    async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
-        user_row = await cursor.fetchone()
-
-    if not user_row:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return user_row_to_dict(user_row)
+    return format_doc(user_doc)
 
 
 @router.put("/profile")
-async def update_profile(req: ProfileUpdateRequest, authorization: str = "", db=Depends(get_db)):
-    """Update current user's profile."""
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    payload = verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+async def update_profile(req: ProfileUpdateRequest, authorization: str = Header(default=""), db=Depends(get_db)):
+    """Update current user's profile in MongoDB."""
+    user_doc = await get_current_user(authorization, db)
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Not authenticated or invalid token")
 
-    user_id = payload.get("user_id")
+    user_id = user_doc["_id"]
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
 
     if updates:
-        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [user_id]
-        await db.execute(f"UPDATE users SET {set_clause} WHERE id = ?", values)
-        await db.commit()
+        updates["updated_at"] = datetime.now(timezone.utc)
+        await db.users.update_one({"_id": user_id}, {"$set": updates})
 
-    async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
-        user_row = await cursor.fetchone()
+        # Sync farm profile if farm_name or total_area changed
+        if "farm_name" in updates or "total_area" in updates or "location" in updates:
+            farm_updates = {}
+            if "farm_name" in updates:
+                farm_updates["name"] = updates["farm_name"]
+            if "total_area" in updates:
+                try:
+                    farm_updates["total_area"] = float(updates["total_area"])
+                except (ValueError, TypeError):
+                    pass
+            if "location" in updates:
+                farm_updates["location"] = updates["location"]
 
-    return user_row_to_dict(user_row)
+            if farm_updates:
+                await db.farm_profiles.update_one(
+                    {"user_id": user_id},
+                    {"$set": farm_updates},
+                    upsert=True,
+                )
+
+    updated_doc = await db.users.find_one({"_id": user_id})
+    return format_doc(updated_doc)

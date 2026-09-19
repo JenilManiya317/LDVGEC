@@ -72,6 +72,9 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     }
 
 
+evaluate_regression = compute_metrics
+
+
 def compute_sliced_metrics(df: pd.DataFrame, slice_col: str, y_true_col: str = "Actual_Yield", y_pred_col: str = "Predicted_Yield") -> pd.DataFrame:
     """
     Computes metrics disaggregated by a slice column (e.g. Crop, State, Season, etc.).

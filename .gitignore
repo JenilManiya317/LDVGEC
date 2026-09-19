@@ -1,5 +1,5 @@
 # ==============================================================================
-# AgriSetu — Git Ignore Rules
+# AgriSetu / FarmWise — Git Ignore Rules
 # ==============================================================================
 
 # --- Node & Frontend Dependencies & Builds ---
@@ -11,6 +11,10 @@ out/
 .vite/
 .cache/
 *.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # --- Python & ML Artifacts ---
 __pycache__/
@@ -57,10 +61,6 @@ venv.bak/
 # --- Logs & Debugging ---
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 # --- Testing & Coverage ---
 coverage/

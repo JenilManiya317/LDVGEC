@@ -1,14 +1,18 @@
 """
-Yield Prediction Router — Serves crop yield predictions from the trained ML pipeline.
+Yield Prediction Router — Serves crop yield predictions from the trained ML pipeline
+and persists prediction history in MongoDB with user data isolation.
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from backend.ml.predictor import predictor
+from backend.database import get_db, format_doc
+from backend.routers.auth import get_current_user
 
 logger = logging.getLogger("farmwise.predict")
 router = APIRouter(prefix="/api/predict", tags=["Yield Prediction"])
@@ -55,8 +59,12 @@ class YieldPredictionResponse(BaseModel):
 
 
 @router.post("/yield", response_model=YieldPredictionResponse)
-async def predict_yield(req: YieldPredictionRequest):
-    """Predict crop yield based on agronomic input features."""
+async def predict_yield(
+    req: YieldPredictionRequest,
+    authorization: str = Header(default=""),
+    db=Depends(get_db),
+):
+    """Predict crop yield based on agronomic input features and save in MongoDB."""
     if not predictor.is_loaded:
         raise HTTPException(
             status_code=503,
@@ -66,10 +74,41 @@ async def predict_yield(req: YieldPredictionRequest):
     try:
         input_data = req.model_dump()
         result = predictor.predict(input_data)
+
+        # Extract user if token provided
+        user = await get_current_user(authorization, db)
+        if user:
+            prediction_doc = {
+                "user_id": user["_id"],  # ObjectId user_id
+                "crop": result["crop"],
+                "season": result["season"],
+                "state": result["state"],
+                "area": result["area"],
+                "input_features": input_data,
+                "predicted_yield": result["predicted_yield"],
+                "unit": result["unit"],
+                "model_used": result["model_used"],
+                "created_at": datetime.now(timezone.utc),
+            }
+            await db.predictions.insert_one(prediction_doc)
+
         return YieldPredictionResponse(**result)
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+
+
+@router.get("/history")
+async def get_prediction_history(authorization: str = Header(default=""), db=Depends(get_db)):
+    """Retrieve yield prediction history for authenticated user."""
+    user = await get_current_user(authorization, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    cursor = db.predictions.find({"user_id": user["_id"]}).sort("created_at", -1)
+    docs = await cursor.to_list(length=100)
+    formatted = [format_doc(d) for d in docs]
+    return {"predictions": formatted, "total": len(formatted)}
 
 
 @router.get("/features")

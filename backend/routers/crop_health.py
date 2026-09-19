@@ -1,23 +1,31 @@
 """
-Crop Health Router — AI-powered crop disease detection via image upload.
+Crop Health Router — AI-powered crop disease detection via image upload
+and diagnostic history persistence in MongoDB.
 """
 
 import logging
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Header
 
 from backend.ml.crop_analyzer import crop_analyzer
+from backend.database import get_db, format_doc
+from backend.routers.auth import get_current_user
 
 logger = logging.getLogger("farmwise.crop_health")
 router = APIRouter(prefix="/api/crop-health", tags=["Crop Health"])
 
 
 @router.post("/analyze")
-async def analyze_crop_health(image: UploadFile = File(...)):
+async def analyze_crop_health(
+    image: UploadFile = File(...),
+    authorization: str = Header(default=""),
+    db=Depends(get_db),
+):
     """
     Upload a crop image for AI-powered disease and health analysis.
-
-    Accepts JPG, PNG, or WebP images up to 15MB.
-    Returns health status, detected issues, and recommendations.
+    Saves analysis report to MongoDB when authenticated.
     """
     # Validate file type
     allowed_types = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
@@ -39,6 +47,18 @@ async def analyze_crop_health(image: UploadFile = File(...)):
 
     try:
         result = await crop_analyzer.analyze_image(image_bytes, image.filename or "crop.jpg")
+
+        # Save to MongoDB crop_health collection if authenticated
+        user = await get_current_user(authorization, db)
+        if user:
+            report_doc = {
+                "user_id": user["_id"],  # ObjectId user_id
+                "filename": image.filename or "crop.jpg",
+                "analysis": result,
+                "created_at": datetime.now(timezone.utc),
+            }
+            await db.crop_health.insert_one(report_doc)
+
         return {
             "status": "success",
             "analysis": result,
@@ -46,3 +66,16 @@ async def analyze_crop_health(image: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Crop health analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@router.get("/history")
+async def get_crop_health_history(authorization: str = Header(default=""), db=Depends(get_db)):
+    """Retrieve crop health diagnostic history for authenticated user."""
+    user = await get_current_user(authorization, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    cursor = db.crop_health.find({"user_id": user["_id"]}).sort("created_at", -1)
+    docs = await cursor.to_list(length=100)
+    formatted = [format_doc(d) for d in docs]
+    return {"reports": formatted, "total": len(formatted)}

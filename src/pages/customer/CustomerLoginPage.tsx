@@ -27,18 +27,18 @@ export const CustomerLoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
-      setError('Please enter your email or mobile number.');
+    if (!identifier.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
       return;
     }
     setError('');
     setIsLoading(true);
     try {
-      const res = await loginWithCredentials(identifier, password, 'customer');
+      const res = await loginWithCredentials(identifier, password);
       if (res.success) {
         navigate('/customer/dashboard');
       } else {
-        setError(res.error || 'Invalid credentials. Please try again.');
+        setError(res.error || 'Login failed.');
       }
     } catch {
       login('customer', identifier, DEMO_CUSTOMER.name);

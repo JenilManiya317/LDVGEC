@@ -11,7 +11,14 @@ import joblib
 from pathlib import Path
 from typing import Optional
 
+import sys
 from backend.config import MODEL_PIPELINE_PATH, FEATURES_JSON_PATH, FEATURES_SPEC
+import backend.ml.pipeline.train as _pipeline_train
+import backend.ml.pipeline.features as _pipeline_features
+
+# Register aliases for backwards compatibility with any pickled pipelines
+sys.modules.setdefault("src.train", _pipeline_train)
+sys.modules.setdefault("src.features", _pipeline_features)
 
 logger = logging.getLogger("farmwise.predictor")
 

@@ -12,12 +12,15 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 
+from pathlib import Path
+
 RANDOM_SEED = 42
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-RAW_DATA_PATH = os.path.join(DATA_DIR, "crop_yield_enriched.csv")
-TRAIN_DATA_PATH = os.path.join(DATA_DIR, "train.csv")
-TEST_DATA_PATH = os.path.join(DATA_DIR, "test.csv")
-LEAKAGE_REPORT_PATH = os.path.join(DATA_DIR, "leakage_analysis.json")
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+DATA_DIR = BASE_DIR / "data"
+RAW_DATA_PATH = str(DATA_DIR / "crop_yield_enriched.csv")
+TRAIN_DATA_PATH = str(DATA_DIR / "train.csv")
+TEST_DATA_PATH = str(DATA_DIR / "test.csv")
+LEAKAGE_REPORT_PATH = str(DATA_DIR / "leakage_analysis.json")
 
 
 def inspect_data_leakage(df: pd.DataFrame) -> dict:

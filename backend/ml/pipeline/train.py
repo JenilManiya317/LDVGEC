@@ -46,12 +46,14 @@ from backend.ml.pipeline.features import (
 from backend.ml.pipeline.metrics import compute_metrics
 
 
+from pathlib import Path
+
 RANDOM_SEED = 42
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-TRAIN_DATA_PATH = os.path.join(DATA_DIR, "train.csv")
-MODELS_DIR = os.path.join(BASE_DIR, "models")
-REPORTS_DIR = os.path.join(BASE_DIR, "reports")
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+DATA_DIR = BASE_DIR / "data"
+TRAIN_DATA_PATH = str(DATA_DIR / "train.csv")
+MODELS_DIR = str(BASE_DIR / "models")
+REPORTS_DIR = str(BASE_DIR / "reports")
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
@@ -375,6 +377,9 @@ def main():
         json.dump(summary, f, indent=2)
 
     print("\nTraining and Model Selection Stage Complete.")
+
+
+train_crop_yield_models = main
 
 
 if __name__ == "__main__":

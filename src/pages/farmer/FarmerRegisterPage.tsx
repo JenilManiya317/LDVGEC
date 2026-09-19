@@ -62,16 +62,12 @@ export const FarmerRegisterPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim()) {
-      setError('Please fill out all required fields.');
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+      setError('Please fill out all required fields including password.');
       return;
     }
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long.');
-      return;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match. Please ensure both passwords match.');
       return;
     }
 
