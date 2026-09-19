@@ -63,8 +63,12 @@ TRAIN_DATA_PATH = str(DATA_DIR / "train.csv")
 MODELS_DIR = str(BASE_DIR / "models")
 REPORTS_DIR = str(BASE_DIR / "reports")
 
-os.makedirs(MODELS_DIR, exist_ok=True)
-os.makedirs(REPORTS_DIR, exist_ok=True)
+try:
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+except (OSError, PermissionError):
+    pass
+
 
 
 def get_model_candidates(seed: int = RANDOM_SEED):
