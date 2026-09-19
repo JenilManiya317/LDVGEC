@@ -3,7 +3,7 @@
  * Handles authentication tokens, error handling, and response typing.
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
 /**
  * Get the stored JWT token from localStorage.
@@ -250,8 +250,13 @@ export const api = {
 
   // --- Marketplace ---
   marketplace: {
-    listings: (category: string = '', search: string = '') =>
-      request('GET', `/api/marketplace/listings?category=${encodeURIComponent(category)}&search=${encodeURIComponent(search)}`),
+    listings: (category: string = '', search: string = '', farmerId: string = '') => {
+      let url = `/api/marketplace/listings?category=${encodeURIComponent(category)}&search=${encodeURIComponent(search)}`;
+      if (farmerId) {
+        url += `&farmer_id=${encodeURIComponent(farmerId)}`;
+      }
+      return request('GET', url);
+    },
 
     getListing: (id: string | number) =>
       request('GET', `/api/marketplace/listings/${id}`),

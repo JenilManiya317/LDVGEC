@@ -8,6 +8,8 @@ import {
   CalendarDays,
   TrendingUp,
   PlusCircle,
+  ShoppingBag,
+  Store,
   LogOut,
   Menu,
   X,
@@ -32,8 +34,9 @@ export const FarmerSidebar: React.FC = () => {
     { label: "Today's Tasks", icon: CheckSquare, route: '/farmer/todays-instructions' },
     { label: 'Weather & Advisory', icon: CloudSun, route: '/farmer/weather-advisory' },
     { label: 'Work Timetable', icon: CalendarDays, route: '/farmer/timetable' },
-    { label: 'Mandi Market Rates', icon: TrendingUp, route: '/farmer/market-price' },
+    { label: 'Market Prices', icon: TrendingUp, route: '/farmer/market-price' },
     { label: 'Direct Sell Crop', icon: PlusCircle, route: '/farmer/list-crop' },
+    { label: 'Seller Hub & Orders', icon: ShoppingBag, route: '/farmer/seller-hub', badge: 'Orders' },
   ];
 
   const handleLogout = () => {

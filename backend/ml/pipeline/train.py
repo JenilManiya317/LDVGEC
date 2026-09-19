@@ -34,8 +34,16 @@ from sklearn.ensemble import (
     ExtraTreesRegressor,
     HistGradientBoostingRegressor,
 )
-from xgboost import XGBRegressor
-from catboost import CatBoostRegressor
+try:
+    from xgboost import XGBRegressor
+except ImportError:
+    XGBRegressor = None
+
+try:
+    from catboost import CatBoostRegressor
+except ImportError:
+    CatBoostRegressor = None
+
 
 from backend.ml.pipeline.features import (
     AgronomicFeatureEngineer,
@@ -63,7 +71,7 @@ def get_model_candidates(seed: int = RANDOM_SEED):
     """
     Returns the 5 tree-based model candidates with tuned baseline hyperparameters.
     """
-    return {
+    candidates = {
         "RandomForest": RandomForestRegressor(
             n_estimators=120,
             max_depth=16,
@@ -85,7 +93,10 @@ def get_model_candidates(seed: int = RANDOM_SEED):
             min_samples_leaf=15,
             random_state=seed,
         ),
-        "XGBoost": XGBRegressor(
+    }
+
+    if XGBRegressor is not None:
+        candidates["XGBoost"] = XGBRegressor(
             n_estimators=220,
             learning_rate=0.06,
             max_depth=7,
@@ -93,15 +104,19 @@ def get_model_candidates(seed: int = RANDOM_SEED):
             colsample_bytree=0.85,
             n_jobs=-1,
             random_state=seed,
-        ),
-        "CatBoost": CatBoostRegressor(
+        )
+
+    if CatBoostRegressor is not None:
+        candidates["CatBoost"] = CatBoostRegressor(
             iterations=250,
             learning_rate=0.07,
             depth=6,
             verbose=0,
             random_seed=seed,
-        ),
-    }
+        )
+
+    return candidates
+
 
 
 def run_cross_validation(train_df: pd.DataFrame, n_splits: int = 5):

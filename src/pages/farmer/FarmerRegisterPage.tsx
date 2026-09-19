@@ -287,7 +287,7 @@ export const FarmerRegisterPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-3" autoComplete="off">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-white/80 mb-1">Full Name</label>
@@ -295,6 +295,8 @@ export const FarmerRegisterPage: React.FC = () => {
                     <User className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
+                      name="farmer_reg_name"
+                      autoComplete="off"
                       required
                       placeholder="e.g. Rudra Patel"
                       value={formData.name}
@@ -310,6 +312,8 @@ export const FarmerRegisterPage: React.FC = () => {
                     <Mail className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
                     <input
                       type="email"
+                      name="farmer_reg_email"
+                      autoComplete="off"
                       required
                       placeholder="rudra@agrisetu.in"
                       value={formData.email}
@@ -352,6 +356,8 @@ export const FarmerRegisterPage: React.FC = () => {
                     <Phone className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="tel"
+                      name="farmer_reg_phone"
+                      autoComplete="off"
                       required
                       placeholder="+91 98251 44321"
                       value={formData.phone}
@@ -378,6 +384,8 @@ export const FarmerRegisterPage: React.FC = () => {
                     <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="password"
+                      name="farmer_reg_password"
+                      autoComplete="new-password"
                       required
                       placeholder="Create password (min 6 chars)"
                       value={formData.password}
@@ -393,6 +401,8 @@ export const FarmerRegisterPage: React.FC = () => {
                     <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="password"
+                      name="farmer_reg_confirm_password"
+                      autoComplete="new-password"
                       required
                       placeholder="Re-type password"
                       value={formData.confirmPassword}

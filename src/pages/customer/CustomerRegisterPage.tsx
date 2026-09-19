@@ -283,7 +283,7 @@ export const CustomerRegisterPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-3" autoComplete="off">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-white/80 mb-1">Full Name</label>
@@ -291,6 +291,8 @@ export const CustomerRegisterPage: React.FC = () => {
                     <User className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
+                      name="customer_reg_name"
+                      autoComplete="off"
                       required
                       placeholder="e.g. Aarav Sharma"
                       value={formData.name}
@@ -306,6 +308,8 @@ export const CustomerRegisterPage: React.FC = () => {
                     <Mail className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
                     <input
                       type="email"
+                      name="customer_reg_email"
+                      autoComplete="off"
                       required
                       placeholder="aarav@gmail.com"
                       value={formData.email}
@@ -348,6 +352,8 @@ export const CustomerRegisterPage: React.FC = () => {
                     <Phone className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="tel"
+                      name="customer_reg_phone"
+                      autoComplete="off"
                       required
                       placeholder="+91 97234 88120"
                       value={formData.phone}
@@ -374,6 +380,8 @@ export const CustomerRegisterPage: React.FC = () => {
                     <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="password"
+                      name="customer_reg_password"
+                      autoComplete="new-password"
                       required
                       placeholder="Create password (min 6 chars)"
                       value={formData.password}
@@ -389,6 +397,8 @@ export const CustomerRegisterPage: React.FC = () => {
                     <Lock className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="password"
+                      name="customer_reg_confirm_password"
+                      autoComplete="new-password"
                       required
                       placeholder="Re-type password"
                       value={formData.confirmPassword}

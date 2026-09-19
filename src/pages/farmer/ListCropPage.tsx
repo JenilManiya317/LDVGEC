@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '../../lib/router';
 import { useAuth } from '../../lib/auth';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
@@ -45,6 +45,7 @@ export const ListCropPage: React.FC = () => {
   const [publishedItem, setPublishedItem] = useState<ProductItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [prefilledNotice, setPrefilledNotice] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -66,6 +67,42 @@ export const ListCropPage: React.FC = () => {
   );
   const [imageFileName, setImageFileName] = useState<string>('sample-tomato.jpg');
   const [isCustomUploaded, setIsCustomUploaded] = useState<boolean>(false);
+
+  // Read prefilled data from AI Crop Diagnostic scan or external trigger
+  useEffect(() => {
+    try {
+      const savedPrefill = localStorage.getItem('agrisetu_prefill_list_crop_v1');
+      if (savedPrefill) {
+        const p = JSON.parse(savedPrefill);
+        setFormData((prev) => ({
+          ...prev,
+          crop: p.crop || prev.crop,
+          variety: p.variety || `${p.crop || 'Fresh'} Grade-A Organic`,
+          category: p.category || prev.category,
+          quantity: p.quantity || prev.quantity,
+          price: p.price || prev.price,
+          description: p.description || prev.description,
+          isOrganic: p.isOrganic !== undefined ? p.isOrganic : prev.isOrganic,
+          harvestDate: p.harvestDate || prev.harvestDate,
+          location: p.location || user?.location || prev.location
+        }));
+
+        if (p.imageUrl) {
+          setImageUrl(p.imageUrl);
+          setImageFileName(p.imageTitle || `${p.crop?.toLowerCase() || 'harvest'}-photo.jpg`);
+          setIsCustomUploaded(true);
+        }
+
+        setPrefilledNotice(`Auto-populated details and photo from ${p.crop || 'AI Crop Health Diagnostic'}!`);
+        setTimeout(() => setPrefilledNotice(null), 5000);
+
+        // Clear temporary prefill storage
+        localStorage.removeItem('agrisetu_prefill_list_crop_v1');
+      }
+    } catch (e) {
+      console.warn('Error reading prefill crop data:', e);
+    }
+  }, [user]);
 
   const qty = parseFloat(formData.quantity) || 0;
   const unitPrice = parseFloat(formData.price) || 0;
@@ -315,7 +352,27 @@ export const ListCropPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-6">
+              {prefilledNotice && (
+                <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top duration-300">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-5 h-5 text-emerald-300 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">AI Crop Diagnostic Import</h4>
+                      <p className="text-xs text-emerald-100 font-medium">{prefilledNotice}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPrefilledNotice(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-6">
               {/* CROP IMAGE UPLOAD SECTION */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -658,6 +715,7 @@ export const ListCropPage: React.FC = () => {
                 </GlassButton>
               </div>
             </form>
+            </div>
           )}
         </GlassCard>
       </main>

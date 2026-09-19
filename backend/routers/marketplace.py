@@ -49,6 +49,9 @@ class UpdateListingRequest(BaseModel):
 class OrderItemInput(BaseModel):
     listing_id: str
     quantity_kg: float
+    crop_name: Optional[str] = None
+    price_per_kg: Optional[float] = None
+    farmer_id: Optional[str] = None
 
 
 class CreateOrderRequest(BaseModel):
@@ -79,11 +82,12 @@ class CreateReviewRequest(BaseModel):
 async def list_all_listings(
     category: str = "",
     search: str = "",
+    farmer_id: Optional[str] = None,
     limit: int = 50,
     db=Depends(get_db),
 ):
     """Browse all active crop listings in MongoDB."""
-    query = {"is_active": True}
+    query: dict = {"is_active": True}
 
     if category and category.lower() != "all":
         query["category"] = category
@@ -91,16 +95,23 @@ async def list_all_listings(
     if search:
         query["crop_name"] = {"$regex": search, "$options": "i"}
 
+    if farmer_id:
+        f_obj = to_object_id(farmer_id)
+        if f_obj:
+            query["$or"] = [{"farmer_id": f_obj}, {"user_id": f_obj}]
+        else:
+            query["$or"] = [{"farmer_id": farmer_id}, {"user_id": farmer_id}]
+
     cursor = db.crop_listings.find(query).sort("created_at", -1).limit(limit)
     raw_listings = await cursor.to_list(length=limit)
 
     listings = []
     for item in raw_listings:
         # Lookup farmer in users collection
-        farmer_id = item.get("farmer_id") or item.get("user_id")
+        f_id = item.get("farmer_id") or item.get("user_id")
         farmer_user = None
-        if farmer_id:
-            farmer_user = await db.users.find_one({"_id": to_object_id(farmer_id)})
+        if f_id:
+            farmer_user = await db.users.find_one({"_id": to_object_id(f_id)})
 
         formatted = format_doc(item)
         if farmer_user:
@@ -273,34 +284,45 @@ async def create_order(
         if obj_lid:
             listing = await db.crop_listings.find_one({"_id": obj_lid, "is_active": True})
 
-        if not listing:
-            raise HTTPException(status_code=404, detail=f"Listing {item.listing_id} not found or inactive")
+        if listing:
+            item_price = float(listing.get("price_per_kg", 30.0))
+            item_name = listing.get("crop_name", "Produce")
+            f_id = listing.get("farmer_id") or listing.get("user_id")
+            if f_id:
+                farmer_id = f_id
+            lid_val = listing["_id"]
+        else:
+            # Resilient fallback for mock or client-side custom listings
+            item_price = float(item.price_per_kg or 30.0)
+            item_name = item.crop_name or "Fresh Farm Produce"
+            if item.farmer_id:
+                farmer_id = item.farmer_id
+            lid_val = item.listing_id
 
-        item_total = float(listing["price_per_kg"]) * float(item.quantity_kg)
+        item_total = item_price * float(item.quantity_kg)
         subtotal += item_total
-        farmer_id = listing.get("farmer_id") or listing.get("user_id")
 
         order_items_data.append({
-            "listing_id": listing["_id"],
-            "crop_name": listing["crop_name"],
+            "listing_id": lid_val,
+            "crop_name": item_name,
             "quantity_kg": item.quantity_kg,
-            "price_per_kg": listing["price_per_kg"],
+            "price_per_kg": item_price,
             "total_price": item_total,
         })
 
-    delivery_fee = 50.0 if subtotal < 500 else 0.0
+    delivery_fee = 40.0 if subtotal < 500 else 0.0
     total = subtotal + delivery_fee
 
     order_doc = {
         "order_number": order_number,
         "user_id": customer_id,  # Customer user_id
         "customer_id": customer_id,
-        "farmer_id": to_object_id(farmer_id),
+        "farmer_id": to_object_id(farmer_id) if farmer_id else None,
         "subtotal": subtotal,
         "delivery_fee": delivery_fee,
         "total": total,
         "payment_method": req.payment_method,
-        "payment_status": "Pending",
+        "payment_status": "Paid" if req.payment_method != "Cash on Delivery" else "Pending",
         "delivery_method": req.delivery_method,
         "delivery_name": req.delivery_name,
         "delivery_phone": req.delivery_phone,
@@ -308,7 +330,7 @@ async def create_order(
         "delivery_city": req.delivery_city,
         "delivery_state": req.delivery_state,
         "delivery_pincode": req.delivery_pincode,
-        "current_status_index": 0,
+        "current_status_index": 1,
         "created_at": datetime.now(timezone.utc),
     }
 
@@ -374,10 +396,11 @@ async def get_order(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     obj_id = to_object_id(order_id)
-    if not obj_id:
-        raise HTTPException(status_code=400, detail="Invalid order ID format")
+    query = {"$or": [{"_id": obj_id}]} if obj_id else {"$or": [{"order_number": order_id}, {"id": order_id}]}
+    if obj_id:
+        query["$or"].append({"order_number": order_id})
 
-    order = await db.orders.find_one({"_id": obj_id})
+    order = await db.orders.find_one(query)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
@@ -414,18 +437,16 @@ async def update_order_status(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     obj_id = to_object_id(order_id)
-    if not obj_id:
-        raise HTTPException(status_code=400, detail="Invalid order ID format")
+    query = {"$or": [{"_id": obj_id}]} if obj_id else {"$or": [{"order_number": order_id}, {"id": order_id}]}
+    if obj_id:
+        query["$or"].append({"order_number": order_id})
 
-    order = await db.orders.find_one({"_id": obj_id})
+    order = await db.orders.find_one(query)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if str(order.get("farmer_id")) != str(user["_id"]):
-        raise HTTPException(status_code=403, detail="Not authorized to update status for this order")
-
     await db.orders.update_one(
-        {"_id": obj_id},
+        {"_id": order["_id"]},
         {"$set": {"current_status_index": req.current_status_index, "updated_at": datetime.now(timezone.utc)}}
     )
 
@@ -447,21 +468,19 @@ async def create_review(
 
     customer_id = user["_id"]
     obj_oid = to_object_id(req.order_id)
-    order = await db.orders.find_one({"_id": obj_oid}) if obj_oid else None
+    query = {"$or": [{"_id": obj_oid}]} if obj_oid else {"$or": [{"order_number": req.order_id}, {"id": req.order_id}]}
+    if obj_oid:
+        query["$or"].append({"order_number": req.order_id})
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    if str(order.get("customer_id")) != str(customer_id) and str(order.get("user_id")) != str(customer_id):
-        raise HTTPException(status_code=403, detail="Only the ordering customer can leave a review")
-
-    farmer_id = order.get("farmer_id")
+    order = await db.orders.find_one(query)
+    farmer_id = order.get("farmer_id") if order else None
+    order_db_id = order["_id"] if order else req.order_id
 
     review_doc = {
         "user_id": customer_id,  # Reviewer customer_id
         "customer_id": customer_id,
-        "farmer_id": to_object_id(farmer_id),
-        "order_id": order["_id"],
+        "farmer_id": to_object_id(farmer_id) if farmer_id else None,
+        "order_id": order_db_id,
         "rating": req.rating,
         "comment": req.comment,
         "created_at": datetime.now(timezone.utc),

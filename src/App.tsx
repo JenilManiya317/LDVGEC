@@ -20,6 +20,7 @@ import { TodaysInstructionsPage } from './pages/farmer/TodaysInstructionsPage';
 import { TimetablePage } from './pages/farmer/TimetablePage';
 import { MarketPricePage } from './pages/farmer/MarketPricePage';
 import { ListCropPage } from './pages/farmer/ListCropPage';
+import { SellerHubPage } from './pages/farmer/SellerHubPage';
 
 // Customer Pages
 import { CustomerLoginPage } from './pages/customer/CustomerLoginPage';
@@ -78,6 +79,9 @@ const AppRouter: React.FC = () => {
   }
   if (path === '/farmer/list-crop') {
     return <ListCropPage />;
+  }
+  if (path === '/farmer/seller-hub' || path === '/farmer/orders') {
+    return <SellerHubPage />;
   }
 
   // Customer Authentication

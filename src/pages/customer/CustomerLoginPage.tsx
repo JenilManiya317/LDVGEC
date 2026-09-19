@@ -149,13 +149,15 @@ export const CustomerLoginPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-[11px] font-bold text-white/80 mb-1.5">Email or Mobile Number</label>
                 <div className="relative">
                   <User className="w-4 h-4 text-white absolute left-4 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
+                    name="customer_identifier"
+                    autoComplete="off"
                     required
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
@@ -171,6 +173,8 @@ export const CustomerLoginPage: React.FC = () => {
                   <Lock className="w-4 h-4 text-white absolute left-4 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
+                    name="customer_password"
+                    autoComplete="new-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
