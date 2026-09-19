@@ -85,9 +85,12 @@ async function request<T = any>(
 
     return { data, error: null, status: response.status };
   } catch (err: any) {
+    const isNetworkError = err.name === 'TypeError' || err.message === 'Failed to fetch';
     return {
       data: null,
-      error: err.message || 'Network error — is the backend running?',
+      error: isNetworkError
+        ? `Cannot connect to backend (${API_BASE_URL}). Please make sure your FastAPI backend server is running.`
+        : (err.message || 'Network error — is the backend running?'),
       status: 0,
     };
   }
