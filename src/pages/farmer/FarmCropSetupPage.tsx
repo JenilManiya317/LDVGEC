@@ -3,16 +3,27 @@ import { useRouter } from '../../lib/router';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
 import { GlassCard } from '../../components/common/GlassCard';
 import { GlassButton } from '../../components/common/GlassButton';
-import { Sprout, Check, ArrowRight, ArrowLeft, Trees, Sparkles, CheckCircle2, ShieldCheck, Droplets, Cpu } from 'lucide-react';
+import { Sprout, Check, ArrowRight, ArrowLeft, Trees, Sparkles, CheckCircle2, ShieldCheck, Droplets, Cpu, TrendingUp } from 'lucide-react';
 import { api } from '../../lib/api';
+import { predictYieldLocally, formatBackendYieldPrediction, YieldPredictionOutput } from '../../lib/ml';
+import { CityStateSelect } from '../../components/common/CityStateSelect';
 
 export const FarmCropSetupPage: React.FC = () => {
   const { navigate } = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
-  const [mlYield, setMlYield] = useState<number | null>(null);
-  const [modelUsed, setModelUsed] = useState<string>('RandomForest ML');
+  const [prediction, setPrediction] = useState<YieldPredictionOutput>(() =>
+    predictYieldLocally({
+      crop: 'Tomato',
+      season: 'Kharif',
+      state: 'Gujarat',
+      areaAcres: 3.5,
+      soilPh: 6.8,
+      soilMoisture: 72,
+    })
+  );
+
 
   // Form states based on agricultural dataset parameters
   const [farmData, setFarmData] = useState({
@@ -36,11 +47,10 @@ export const FarmCropSetupPage: React.FC = () => {
     moistureTarget: '72'
   });
 
-  const areaNum = parseFloat(cropData.area) || 3.5;
-  const estYieldQtl = mlYield !== null ? mlYield.toFixed(1) : (areaNum * 24.2).toFixed(1);
+  const areaNum = Math.max(0.1, parseFloat(cropData.area) || 3.5);
   const waterReqLitres = Math.round(areaNum * 2200);
 
-  // Call backend ML Prediction model
+  // Call backend ML Prediction model with client-side fallback
   useEffect(() => {
     let isCancelled = false;
     const fetchPrediction = async () => {
@@ -62,15 +72,36 @@ export const FarmCropSetupPage: React.FC = () => {
           Irrigation_Type: farmData.irrigationType.includes('Drip') ? 'Drip' : 'Canal',
         });
 
-        if (!isCancelled && res.data?.predicted_yield) {
-          // Model returns total production in quintals/metric tons
-          setMlYield(res.data.predicted_yield);
-          if (res.data.model_used) {
-            setModelUsed(res.data.model_used);
-          }
+        if (!isCancelled && res.data?.predicted_yield !== undefined) {
+          const formatted = formatBackendYieldPrediction(res.data, areaNum, cropData.crop);
+          setPrediction(formatted);
+        } else if (!isCancelled) {
+          // Resilient client fallback
+          const local = predictYieldLocally({
+            crop: cropData.crop,
+            season: cropData.season,
+            state: farmData.state || 'Gujarat',
+            areaAcres: areaNum,
+            soilPh: parseFloat(cropData.soilPh) || 6.5,
+            soilMoisture: parseFloat(cropData.moistureTarget) || 60,
+            irrigationType: farmData.irrigationType,
+          });
+          setPrediction(local);
         }
       } catch (err) {
-        console.warn('Backend ML prediction fallback:', err);
+        console.warn('Backend ML prediction fallback triggered:', err);
+        if (!isCancelled) {
+          const local = predictYieldLocally({
+            crop: cropData.crop,
+            season: cropData.season,
+            state: farmData.state || 'Gujarat',
+            areaAcres: areaNum,
+            soilPh: parseFloat(cropData.soilPh) || 6.5,
+            soilMoisture: parseFloat(cropData.moistureTarget) || 60,
+            irrigationType: farmData.irrigationType,
+          });
+          setPrediction(local);
+        }
       } finally {
         if (!isCancelled) setIsPredicting(false);
       }
@@ -80,7 +111,8 @@ export const FarmCropSetupPage: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [cropData.crop, cropData.season, cropData.area, cropData.soilPh, farmData.state, farmData.soilType, farmData.irrigationType]);
+  }, [cropData.crop, cropData.season, cropData.area, cropData.soilPh, cropData.moistureTarget, farmData.state, farmData.soilType, farmData.irrigationType, areaNum]);
+
 
   const handleSave = () => {
     setSavedSuccess(true);
@@ -161,25 +193,15 @@ export const FarmCropSetupPage: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-white/80 mb-1">State & Region</label>
-                <input
-                  type="text"
-                  value={farmData.state}
-                  onChange={(e) => setFarmData({ ...farmData, state: e.target.value })}
-                  className="w-full glass-input px-4 py-2.5 rounded-2xl text-xs font-bold text-white placeholder-white/60"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-white/80 mb-1">District / Mandi Zone</label>
-                <input
-                  type="text"
-                  value={farmData.district}
-                  onChange={(e) => setFarmData({ ...farmData, district: e.target.value })}
-                  className="w-full glass-input px-4 py-2.5 rounded-2xl text-xs font-bold text-white placeholder-white/60"
-                />
-              </div>
+              <CityStateSelect
+                selectedState={farmData.state}
+                selectedDistrict={farmData.district}
+                onStateChange={(state) => setFarmData((prev) => ({ ...prev, state }))}
+                onDistrictChange={(district) => setFarmData((prev) => ({ ...prev, district }))}
+                stateLabel="State & Region"
+                districtLabel="District / Mandi Zone"
+                className="sm:col-span-2"
+              />
 
               <div>
                 <label className="block text-xs font-bold text-white/80 mb-1">Primary Soil Classification</label>
@@ -276,28 +298,42 @@ export const FarmCropSetupPage: React.FC = () => {
             </div>
 
             {/* Live Real-time Agricultural Calculations Card */}
-            <div className="p-4 rounded-2xl glass-surface border border-white/20">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-white">
-                  Live Precision Agricultural Projections
+            <div className="p-4 rounded-2xl glass-surface border border-white/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-amber-300" />
+                  Live AI Agronomic & Economic Projections
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30 flex items-center gap-1">
-                  <Cpu className="w-3 h-3 text-white" />
-                  {isPredicting ? 'Computing ML...' : `${modelUsed} Pipeline`}
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                  isPredicting
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                    : prediction.isBackend
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                    : 'bg-cyan-500/20 text-cyan-300 border-cyan-400/30'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    isPredicting ? 'bg-amber-400 animate-ping' : prediction.isBackend ? 'bg-emerald-400' : 'bg-cyan-400'
+                  }`} />
+                  {isPredicting ? 'Computing Inference...' : `${prediction.modelUsed} (${prediction.confidenceScore}%)`}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="p-2.5 rounded-xl glass-surface-subtle">
-                  <span className="text-[10px] text-white/70 font-bold block">Estimated Production</span>
-                  <span className="text-sm font-black text-white">{estYieldQtl} Quintals</span>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                <div className="p-2.5 rounded-xl glass-surface-subtle border border-white/15">
+                  <span className="text-[10px] text-white/70 font-bold block">Yield Rate</span>
+                  <span className="text-base font-black text-white">{prediction.yieldPerAcreQtl} <span className="text-[10px] font-normal text-white/70">Qtl/Acre</span></span>
                 </div>
-                <div className="p-2.5 rounded-xl glass-surface-subtle">
-                  <span className="text-[10px] text-white/70 font-bold block">Weekly Water Demand</span>
-                  <span className="text-sm font-black text-white">{waterReqLitres.toLocaleString()} L</span>
+                <div className="p-2.5 rounded-xl glass-surface-subtle border border-white/15">
+                  <span className="text-[10px] text-white/70 font-bold block">Total Production</span>
+                  <span className="text-base font-black text-white">{prediction.totalProductionQtl} <span className="text-[10px] font-normal text-white/70">Qtl</span></span>
                 </div>
-                <div className="p-2.5 rounded-xl glass-surface-subtle">
-                  <span className="text-[10px] text-white/70 font-bold block">NPK Requirement</span>
-                  <span className="text-sm font-black text-white">19:19:19 + Vermi</span>
+                <div className="p-2.5 rounded-xl glass-surface-subtle border border-white/15">
+                  <span className="text-[10px] text-white/70 font-bold block">Mandi Gross Value</span>
+                  <span className="text-base font-black text-emerald-300">₹{prediction.estimatedRevenueInr.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="p-2.5 rounded-xl glass-surface-subtle border border-white/15">
+                  <span className="text-[10px] text-white/70 font-bold block">Weekly Water Cycle</span>
+                  <span className="text-base font-black text-white">{waterReqLitres.toLocaleString()} <span className="text-[10px] font-normal text-white/70">L</span></span>
                 </div>
               </div>
             </div>
@@ -347,8 +383,10 @@ export const FarmCropSetupPage: React.FC = () => {
                   <div className="p-4 rounded-2xl glass-surface-subtle border border-white/20 space-y-2">
                     <span className="text-[10px] font-bold uppercase text-white block">Crop Parameters</span>
                     <div className="flex justify-between"><span className="text-white/70">Crop:</span> <span className="font-bold text-white">{cropData.crop} ({cropData.area} Acres)</span></div>
-                    <div className="flex justify-between"><span className="text-white/70">Expected Yield:</span> <span className="font-bold text-white">{estYieldQtl} Quintals</span></div>
+                    <div className="flex justify-between"><span className="text-white/70">Expected Yield:</span> <span className="font-bold text-white">{prediction.totalProductionQtl} Qtl ({prediction.yieldPerAcreQtl} Qtl/Acre)</span></div>
+                    <div className="flex justify-between"><span className="text-white/70">Estimated Value:</span> <span className="font-bold text-emerald-300">₹{prediction.estimatedRevenueInr.toLocaleString('en-IN')}</span></div>
                     <div className="flex justify-between"><span className="text-white/70">Soil pH Target:</span> <span className="font-bold text-white">{cropData.soilPh} (Neutral)</span></div>
+                    <div className="flex justify-between"><span className="text-white/70">AI Pipeline:</span> <span className="font-bold text-white">{prediction.modelUsed}</span></div>
                   </div>
                 </div>
 

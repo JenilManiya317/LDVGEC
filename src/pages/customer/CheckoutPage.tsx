@@ -3,6 +3,7 @@ import { useRouter } from '../../lib/router';
 import { CustomerNavbar } from '../../components/layout/CustomerNavbar';
 import { GlassCard } from '../../components/common/GlassCard';
 import { GlassButton } from '../../components/common/GlassButton';
+import { CityStateSelect } from '../../components/common/CityStateSelect';
 import { useCart } from '../../lib/cart';
 import { useAuth } from '../../lib/auth';
 import { Check, Truck, Store, CreditCard, Banknote, QrCode, Sparkles } from 'lucide-react';
@@ -121,20 +122,17 @@ export const CheckoutPage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-white/90 mb-1">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={address.city}
-                    onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                    className="w-full glass-input rounded-xl py-2.5 px-3.5 text-xs font-bold text-white"
-                  />
-                </div>
+                <CityStateSelect
+                  selectedState={address.state}
+                  selectedDistrict={address.city}
+                  onStateChange={(state) => setAddress((prev) => ({ ...prev, state }))}
+                  onDistrictChange={(city) => setAddress((prev) => ({ ...prev, city }))}
+                  stateLabel="State"
+                  districtLabel="City / District"
+                  className="sm:col-span-2"
+                />
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-white/90 mb-1">
                     Postal PIN Code
                   </label>

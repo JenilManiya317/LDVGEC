@@ -3,6 +3,7 @@ import { useRouter } from '../../lib/router';
 import { FarmerSidebar } from '../../components/layout/FarmerSidebar';
 import { GlassCard } from '../../components/common/GlassCard';
 import { GlassButton } from '../../components/common/GlassButton';
+import { CityStateSelect } from '../../components/common/CityStateSelect';
 import { PlusCircle, Check, Sparkles } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -170,18 +171,13 @@ export const ListCropPage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-white/80 mb-1">
-                    Farm Dispatch Location
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full glass-input rounded-xl py-2.5 px-3.5 text-xs font-bold text-white placeholder-white/60"
-                  />
-                </div>
+                <CityStateSelect
+                  value={formData.location}
+                  onChange={(loc) => setFormData({ ...formData, location: loc })}
+                  stateLabel="Farm State"
+                  districtLabel="Dispatch District / Mandi"
+                  className="sm:col-span-2"
+                />
               </div>
 
               {/* Dynamic Direct Revenue Calculator Card */}

@@ -80,8 +80,30 @@ export interface WeatherData {
   windSpeed: number;
   rainChance: number;
   soilMoisture?: number;
-  forecast: { day: string; temp: number; icon: string; condition: string }[];
+  soilTemperature?: number;
+  apparentTemperature?: number;
+  evapotranspiration?: number;
+  uvIndex?: number;
+  precipitation?: number;
+  location?: string;
+  source?: string;
+  latitude?: number;
+  longitude?: number;
+  forecast: {
+    day: string;
+    temp: number;
+    tempMin?: number;
+    tempMax?: number;
+    icon: string;
+    emoji?: string;
+    condition: string;
+    rainChance?: number;
+    uvIndex?: number;
+    precipitationSum?: number;
+    et0?: number;
+  }[];
 }
+
 
 export interface FarmingAdvisoryCategory {
   title: string;

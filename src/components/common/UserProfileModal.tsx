@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/auth';
 import { useRouter } from '../../lib/router';
 import { GlassCard } from './GlassCard';
 import { GlassButton } from './GlassButton';
+import { CityStateSelect } from './CityStateSelect';
 import {
   X,
   User,
@@ -235,19 +236,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-white/90 mb-1">
-                      Primary Location & District
-                    </label>
-                    <div className="relative">
-                      <MapPin className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        required
-                        value={formData.location}
-                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        className="w-full glass-input rounded-xl py-2.5 pl-10 pr-3 text-xs font-bold text-white"
-                      />
-                    </div>
+                    <CityStateSelect
+                      value={formData.location}
+                      onChange={(loc) => setFormData({ ...formData, location: loc })}
+                      stateLabel="State"
+                      districtLabel="City / District"
+                    />
                   </div>
                 </div>
               </div>

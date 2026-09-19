@@ -190,15 +190,31 @@ export const api = {
 
   // --- Weather ---
   weather: {
-    current: (state: string = 'Gujarat', location: string = 'Surat') =>
-      request('GET', `/api/weather/current?state=${encodeURIComponent(state)}&location=${encodeURIComponent(location)}`),
+    current: (state: string = 'Gujarat', location: string = 'Surat', lat?: number, lon?: number) => {
+      let url = `/api/weather/current?state=${encodeURIComponent(state)}&location=${encodeURIComponent(location)}`;
+      if (lat !== undefined && lon !== undefined) {
+        url += `&lat=${lat}&lon=${lon}`;
+      }
+      return request('GET', url);
+    },
 
-    forecast: (state: string = 'Gujarat', days: number = 7) =>
-      request('GET', `/api/weather/forecast?state=${encodeURIComponent(state)}&days=${days}`),
+    forecast: (state: string = 'Gujarat', days: number = 7, lat?: number, lon?: number) => {
+      let url = `/api/weather/forecast?state=${encodeURIComponent(state)}&days=${days}`;
+      if (lat !== undefined && lon !== undefined) {
+        url += `&lat=${lat}&lon=${lon}`;
+      }
+      return request('GET', url);
+    },
 
-    advisory: (state: string = 'Gujarat', crop: string = 'Rice', season: string = 'Kharif') =>
-      request('GET', `/api/weather/advisory?state=${encodeURIComponent(state)}&crop=${encodeURIComponent(crop)}&season=${encodeURIComponent(season)}`),
+    advisory: (state: string = 'Gujarat', crop: string = 'Rice', season: string = 'Kharif', lat?: number, lon?: number) => {
+      let url = `/api/weather/advisory?state=${encodeURIComponent(state)}&crop=${encodeURIComponent(crop)}&season=${encodeURIComponent(season)}`;
+      if (lat !== undefined && lon !== undefined) {
+        url += `&lat=${lat}&lon=${lon}`;
+      }
+      return request('GET', url);
+    },
   },
+
 
   // --- Market Prices ---
   market: {

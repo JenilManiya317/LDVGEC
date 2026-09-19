@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRouter } from '../../lib/router';
 import { useAuth } from '../../lib/auth';
+import { CityStateSelect } from '../../components/common/CityStateSelect';
 import {
   Sprout,
   ArrowLeft,
@@ -294,20 +295,13 @@ export const FarmerRegisterPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-white/80 mb-1">Farm Location</label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-white absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Surat, Gujarat"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full glass-input rounded-2xl py-2.5 pl-10 pr-3 text-xs font-bold text-white placeholder-white/60"
-                    />
-                  </div>
-                </div>
+                <CityStateSelect
+                  value={formData.location}
+                  onChange={(loc) => setFormData({ ...formData, location: loc })}
+                  stateLabel="Farm State"
+                  districtLabel="Farm District / Mandi Zone"
+                  className="sm:col-span-2"
+                />
               </div>
 
               {/* Password and Password Confirmation Fields */}
