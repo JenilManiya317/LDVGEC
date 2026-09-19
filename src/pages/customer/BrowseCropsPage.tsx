@@ -4,20 +4,20 @@ import { CustomerNavbar } from '../../components/layout/CustomerNavbar';
 import { GlassCard } from '../../components/common/GlassCard';
 import { useCart } from '../../lib/cart';
 import { Search, MapPin, Star, ShoppingCart, Check, Sparkles } from 'lucide-react';
-import { MOCK_PRODUCTS } from '../../lib/mock-data';
 import { ProductItem } from '../../lib/types';
 import { api } from '../../lib/api';
+import { getMergedProducts } from '../../lib/marketplace';
 
 export const BrowseCropsPage: React.FC = () => {
   const { navigate } = useRouter();
   const { addItem } = useCart();
-  const [productsList, setProductsList] = useState<ProductItem[]>(MOCK_PRODUCTS);
+  const [productsList, setProductsList] = useState<ProductItem[]>(() => getMergedProducts());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [maxPrice, setMaxPrice] = useState<number>(150);
+  const [maxPrice, setMaxPrice] = useState<number>(200);
   const [addedId, setAddedId] = useState<string | null>(null);
 
-  const categories = ['All', 'Vegetables', 'Fruits', 'Grains', 'Organic'];
+  const categories = ['All', 'Vegetables', 'Fruits', 'Grains', 'Pulses', 'Organic'];
 
   useEffect(() => {
     let isCancelled = false;
@@ -47,17 +47,15 @@ export const BrowseCropsPage: React.FC = () => {
             isOrganic: Boolean(row.is_organic),
             harvestDate: row.harvest_date || 'Today',
           }));
-          // Merge with mock products ensuring no duplicates
-          const combined = [...backendProducts];
-          for (const mp of MOCK_PRODUCTS) {
-            if (!combined.some(p => p.name.toLowerCase() === mp.name.toLowerCase())) {
-              combined.push(mp);
-            }
-          }
-          setProductsList(combined);
+          setProductsList(getMergedProducts(backendProducts));
+        } else if (!isCancelled) {
+          setProductsList(getMergedProducts());
         }
       } catch (err) {
         console.warn('Marketplace listings fetch fallback:', err);
+        if (!isCancelled) {
+          setProductsList(getMergedProducts());
+        }
       }
     };
 
@@ -80,6 +78,7 @@ export const BrowseCropsPage: React.FC = () => {
     const query = searchQuery.toLowerCase();
     const matchesQuery =
       prod.name.toLowerCase().includes(query) ||
+      (prod.variety && prod.variety.toLowerCase().includes(query)) ||
       prod.farmerName.toLowerCase().includes(query) ||
       prod.location.toLowerCase().includes(query);
 
@@ -107,7 +106,7 @@ export const BrowseCropsPage: React.FC = () => {
             Browse Farm Harvests
           </h1>
           <p className="text-xs sm:text-sm text-white/80 font-medium">
-            Discover fresh organic crops directly sourced from local farmers.
+            Discover fresh organic crops directly sourced from local farmers with zero intermediary margins.
           </p>
         </div>
 
@@ -121,7 +120,7 @@ export const BrowseCropsPage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by crop name, farmer, or city..."
+                placeholder="Search by crop name, variety, farmer, or city..."
                 className="w-full glass-input rounded-xl py-2.5 pl-11 pr-4 text-xs font-bold text-white placeholder:text-white/40"
               />
             </div>
@@ -132,7 +131,7 @@ export const BrowseCropsPage: React.FC = () => {
               <input
                 type="range"
                 min="20"
-                max="150"
+                max="200"
                 step="5"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(Number(e.target.value))}
@@ -166,7 +165,7 @@ export const BrowseCropsPage: React.FC = () => {
               onClick={() => {
                 setSearchQuery('');
                 setSelectedCategory('All');
-                setMaxPrice(150);
+                setMaxPrice(200);
               }}
               className="text-xs text-white underline hover:text-white/80 mt-2 font-bold cursor-pointer"
             >
@@ -229,7 +228,7 @@ export const BrowseCropsPage: React.FC = () => {
 
                 <div className="mt-4 pt-3 border-t border-white/15 flex items-center justify-between">
                   <span className="text-[11px] font-bold text-white/90">
-                    Stock: {prod.quantityAvailableKg} kg
+                    Stock: {prod.quantityAvailableKg || prod.availableStockKg} kg
                   </span>
                   <button
                     onClick={(e) => handleQuickAdd(prod, e)}

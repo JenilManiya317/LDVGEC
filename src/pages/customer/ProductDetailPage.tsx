@@ -21,6 +21,7 @@ import {
 import { MOCK_PRODUCTS } from '../../lib/mock-data';
 import { ProductItem } from '../../lib/types';
 import { api } from '../../lib/api';
+import { findProductById } from '../../lib/marketplace';
 
 export const ProductDetailPage: React.FC = () => {
   const { path, params, navigate } = useRouter();
@@ -28,7 +29,7 @@ export const ProductDetailPage: React.FC = () => {
 
   const pathParts = path.split('/');
   const rawId = params.productId || pathParts[pathParts.length - 1];
-  const initialProduct = MOCK_PRODUCTS.find((p) => p.id === rawId) || MOCK_PRODUCTS[0];
+  const initialProduct = findProductById(rawId) || MOCK_PRODUCTS.find((p) => p.id === rawId) || MOCK_PRODUCTS[0];
   const [product, setProduct] = useState<ProductItem>(initialProduct);
 
   useEffect(() => {

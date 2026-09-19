@@ -16,12 +16,13 @@ import {
 import { MOCK_PRODUCTS } from '../../lib/mock-data';
 import { ProductItem } from '../../lib/types';
 import { api } from '../../lib/api';
+import { getMergedProducts } from '../../lib/marketplace';
 
 export const CustomerDashboardPage: React.FC = () => {
   const { navigate } = useRouter();
   const { user } = useAuth();
   const { addItem } = useCart();
-  const [productsList, setProductsList] = useState<ProductItem[]>(MOCK_PRODUCTS);
+  const [productsList, setProductsList] = useState<ProductItem[]>(() => getMergedProducts());
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [addedNotice, setAddedNotice] = useState<string | null>(null);
 
@@ -55,16 +56,15 @@ export const CustomerDashboardPage: React.FC = () => {
             isOrganic: Boolean(row.is_organic),
             harvestDate: row.harvest_date || 'Today',
           }));
-          const combined = [...backendProducts];
-          for (const mp of MOCK_PRODUCTS) {
-            if (!combined.some(p => p.name.toLowerCase() === mp.name.toLowerCase())) {
-              combined.push(mp);
-            }
-          }
-          setProductsList(combined);
+          setProductsList(getMergedProducts(backendProducts));
+        } else if (!isCancelled) {
+          setProductsList(getMergedProducts());
         }
       } catch (err) {
         console.warn('Dashboard listings fallback:', err);
+        if (!isCancelled) {
+          setProductsList(getMergedProducts());
+        }
       }
     };
 
