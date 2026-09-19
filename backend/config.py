@@ -22,8 +22,11 @@ FEATURES_SPEC = DATA_DIR / "features_spec.json"
 MODEL_PIPELINE_PATH = MODELS_DIR / "best_crop_yield_pipeline.joblib"
 FEATURES_JSON_PATH = MODELS_DIR / "features.json"
 
-# Ensure directories exist
-MODELS_DIR.mkdir(exist_ok=True)
+# Ensure directories exist (safe for read-only serverless runtimes)
+try:
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    pass
 
 # --- Database (MongoDB) ---
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
@@ -39,9 +42,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 
 # --- Server ---
-CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-]
+_env_cors = os.getenv("CORS_ORIGINS", "")
+if _env_cors:
+    CORS_ORIGINS = [origin.strip() for origin in _env_cors.split(",") if origin.strip()]
+else:
+    CORS_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
+
